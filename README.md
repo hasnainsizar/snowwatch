@@ -2,7 +2,7 @@
 
 A competitive displacement signal monitor. Snowwatch tracks public signals of
 Snowflake customer pain — cost complaints, migration chatter, performance gripes,
-vendor comparisons — and rolls them into a weekly digest built for sales
+vendor comparisons — and rolls them into a periodic digest built for sales
 outreach targeting.
 
 It runs entirely offline after collection: no LLM calls, no paid APIs, no
@@ -77,26 +77,29 @@ before running (`set -a; source .env; set +a`).
 
 ```bash
 snowwatch collect      # run all collectors, store new signals
-snowwatch digest       # render the trailing-7-day digest (markdown + HTML)
+snowwatch digest       # render the trailing 14-day digest (markdown + HTML)
 snowwatch stats        # counts by source, category, and week
 snowwatch run          # collect + digest in one shot
 ```
+
+The digest window defaults to 14 days and is fully configurable with `--days`;
+the trend line compares this period against the prior period of equal length.
 
 Common options:
 
 ```bash
 snowwatch collect --db signals.db
-snowwatch digest --days 14 --out digests
+snowwatch digest --days 30 --out digests
 ```
 
 Digests are written to `digests/digest-YYYYMMDD.md` and `.html`.
 
 ## Sample digest
 
-The digest opens with a source summary and a week-over-week trend line, then top
-signals ranked by score (displacement categories only), the same signals grouped
-by category, new companies detected in the window, and a tailored outreach angle
-for every high-score displacement signal.
+The digest opens with a source summary and a period-over-period trend line, then
+top signals ranked by score (displacement categories only), the same signals
+grouped by category, new companies detected in the window, and a tailored
+outreach angle for every high-score displacement signal.
 
 ![Sample snowwatch HTML digest](docs/digest-sample.png)
 
@@ -105,9 +108,9 @@ the outreach threshold. Generate one with `snowwatch digest` and drop a
 screenshot at `docs/digest-sample.png`.*
 
 ```
-# Snowwatch Weekly Digest
-Generated 2026-07-20 18:10 UTC · trailing 7 days · 5 signals
-Trend: 5 this period vs 3 prior (+2)
+# Snowwatch Digest — trailing 14 days
+Generated 2026-07-20 18:10 UTC · trailing 14 days · 9 signals
+Trend: 9 this period vs 6 prior (+3)
 
 ## Top signals by score
 1. [97] MIGRATION_INTENT — Senior Data Engineer — Snowflake Migration
@@ -145,7 +148,10 @@ to snowflake") without an explicit outbound phrase drop the migration bucket and
 apply a penalty, so people *adopting* Snowflake do not read as displacement.
 Positive-context phrases ("snowflake is great", "pricing is fair") suppress the
 cost, performance, and negativity buckets so satisfied mentions do not score as
-pain. Both lists live in `config.py`.
+pain. A topic guard also clears all buckets when a signal carries no
+displacement phrase and none of the data-warehouse vocabulary in
+`DATA_CONTEXT_TERMS`, so snow/weather or CDP "snowflake" false matches score to
+OTHER. All lists live in `config.py`.
 
 **Company extraction** uses confidence tiers. Tier one is explicit context —
 `we at X`, `X's data team`, `at X`, or a legal suffix (`X Inc`) — and counts on
@@ -183,6 +189,12 @@ which biases toward surfacing rather than hiding a possible signal.
 bare capitalization requires repetition and still yields the occasional false
 name or misses a lowercase-styled brand. Treat the company field as a lead, not
 ground truth, and expect the denylist to need occasional additions.
+
+**Stack Exchange volume.** Stack Exchange yields low volume for Snowflake-pain
+terms (single-digit signals per month); the collector uses a broad `snowflake`
+term plus downstream scoring, rather than narrow phrases, so nothing recent is
+missed, with an off-topic guard that routes snow/weather and CDP false matches
+to OTHER.
 
 **Reddit gating.** The Reddit collector is OAuth-only and off by default because
 the Data API requires prior approval. Enabled with approved credentials it is

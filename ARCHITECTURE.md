@@ -51,6 +51,11 @@ Each stage is pure and independently testable:
 - `digest.build_digest_data` is the only place that decides what a digest shows;
   templates are dumb.
 
+Collectors follow a broad-collect / filter-downstream principle: a collector
+casts a wide net (e.g. Stack Exchange's bare `snowflake` term) and leaves
+relevance to `scoring`/`classifier`, so recent signals are never missed at query
+time and off-topic matches are demoted to OTHER after the fact.
+
 ## Adding a new collector
 
 1. Create `snowwatch/collectors/<source>.py` with a class exposing
