@@ -16,6 +16,9 @@
   header { border-bottom: 2px solid var(--line); padding-bottom: 16px; margin-bottom: 24px; }
   h1 { margin: 0 0 4px; font-size: 26px; letter-spacing: -0.02em; }
   .meta { color: var(--muted); font-size: 13px; }
+  .trend { margin-top: 6px; font-size: 13px; font-weight: 600; color: var(--muted); }
+  .trend.up { color: #4ade80; }
+  .trend.down { color: #f87171; }
   h2 { font-size: 18px; margin: 36px 0 12px; color: var(--accent);
     border-left: 3px solid var(--accent); padding-left: 10px; }
   h3 { font-size: 15px; margin: 20px 0 8px; }
@@ -49,6 +52,8 @@
     <h1>Snowwatch Weekly Digest</h1>
     <div class="meta">Generated {{ d.generated_at.strftime("%Y-%m-%d %H:%M UTC") }}
       · trailing {{ d.window_days }} days · {{ d.total_signals }} signals</div>
+    <div class="trend {% if d.trend_delta > 0 %}up{% elif d.trend_delta < 0 %}down{% endif %}">
+      Trend: {{ d.trend_label }}</div>
   </header>
 
   <div class="chips">
@@ -76,11 +81,12 @@
     </div>
     {% endfor %}
   {% else %}
-    <p class="empty">No signals in this window.</p>
+    <p class="empty">None detected this period.</p>
   {% endif %}
 
   <h2>Signals by category</h2>
-  {% for category, rows in d.by_category.items() %}
+  {% if d.by_category %}
+    {% for category, rows in d.by_category.items() %}
     <h3>{{ category }} <span class="cat">({{ rows | length }})</span></h3>
     <ul class="plain">
       {% for s in rows %}
@@ -88,7 +94,10 @@
         <a href="{{ s.url }}">{{ s.title }}</a>{% if s.company %} — {{ s.company }}{% endif %}</li>
       {% endfor %}
     </ul>
-  {% endfor %}
+    {% endfor %}
+  {% else %}
+    <p class="empty">None detected this period.</p>
+  {% endif %}
 
   <h2>New companies detected this week</h2>
   {% if d.new_companies %}
@@ -98,7 +107,7 @@
       {% endfor %}
     </div>
   {% else %}
-    <p class="empty">None.</p>
+    <p class="empty">None detected this period.</p>
   {% endif %}
 
   <h2>Suggested outreach angles</h2>
@@ -111,7 +120,7 @@
     </div>
     {% endfor %}
   {% else %}
-    <p class="empty">No high-score signals crossed the outreach threshold this window.</p>
+    <p class="empty">None detected this period.</p>
   {% endif %}
 </div>
 </body>

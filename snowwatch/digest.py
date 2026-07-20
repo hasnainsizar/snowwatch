@@ -10,6 +10,7 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from . import classifier, db
 from .models import Signal
+from .scoring import normalize_company
 
 _TEMPLATE_DIR = Path(__file__).resolve().parent.parent / "templates"
 
@@ -52,11 +53,22 @@ class DigestData:
     generated_at: datetime
     window_days: int
     total_signals: int
+    prior_signals: int
     top_signals: list[Signal]
     by_category: dict[str, list[Signal]]
     new_companies: list[str]
     outreach: list[tuple[Signal, str]]
     source_counts: list[tuple[str, int]]
+
+    @property
+    def trend_delta(self) -> int:
+        return self.total_signals - self.prior_signals
+
+    @property
+    def trend_label(self) -> str:
+        delta = self.trend_delta
+        arrow = "+" if delta > 0 else ""
+        return f"{self.total_signals} this period vs {self.prior_signals} prior ({arrow}{delta})"
 
 
 def _outreach_angle(signal: Signal) -> str:
@@ -72,15 +84,23 @@ def build_digest_data(conn, window_days: int) -> DigestData:
         by_category.setdefault(sig.category or classifier.OTHER, []).append(sig)
     by_category = {c: rows for c, rows in by_category.items() if rows}
 
-    known = db.known_companies_before(conn, window_days)
-    seen_this_week: list[str] = []
+    displacement = [s for s in signals if s.category in classifier.DISPLACEMENT_CATEGORIES]
+
+    known = {normalize_company(c) for c in db.known_companies_before(conn, window_days)}
+    new_companies: list[str] = []
+    seen_normalized: set[str] = set()
     for sig in signals:
-        if sig.company and sig.company not in known and sig.company not in seen_this_week:
-            seen_this_week.append(sig.company)
+        if not sig.company:
+            continue
+        norm = normalize_company(sig.company)
+        if norm in known or norm in seen_normalized:
+            continue
+        seen_normalized.add(norm)
+        new_companies.append(sig.company)
 
     outreach = [
         (sig, _outreach_angle(sig))
-        for sig in signals
+        for sig in displacement
         if sig.score >= HIGH_SCORE_THRESHOLD
     ]
 
@@ -88,9 +108,10 @@ def build_digest_data(conn, window_days: int) -> DigestData:
         generated_at=datetime.now(timezone.utc),
         window_days=window_days,
         total_signals=len(signals),
-        top_signals=signals[:15],
+        prior_signals=db.count_posted_between(conn, window_days * 2, window_days),
+        top_signals=displacement[:15],
         by_category=by_category,
-        new_companies=seen_this_week,
+        new_companies=new_companies,
         outreach=outreach,
         source_counts=db.counts_by(conn, "source"),
     )
