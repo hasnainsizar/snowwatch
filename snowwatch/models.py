@@ -6,6 +6,10 @@ import hashlib
 from dataclasses import dataclass, field
 from datetime import datetime
 
+# Source tag for offline stub job signals, kept distinct so digests can exclude
+# them by default.
+STUB_SOURCE = "jobs-stub"
+
 
 @dataclass(slots=True)
 class Signal:
@@ -27,6 +31,11 @@ class Signal:
     def url_hash(self) -> str:
         """Stable dedupe key derived from the canonical URL."""
         return hashlib.sha256(self.url.strip().lower().encode("utf-8")).hexdigest()
+
+    @property
+    def is_stub(self) -> bool:
+        """True for offline stub job signals."""
+        return self.source == STUB_SOURCE
 
     @property
     def content(self) -> str:

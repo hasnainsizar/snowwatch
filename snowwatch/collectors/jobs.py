@@ -15,7 +15,7 @@ from typing import Protocol
 import httpx
 
 from .. import config
-from ..models import Signal
+from ..models import STUB_SOURCE, Signal
 from .base import CollectorError, polite_get, truncate
 
 
@@ -59,7 +59,7 @@ class StubJobSource:
             posted = now - timedelta(days=int(s["age_days"]))
             signals.append(
                 Signal(
-                    source="jobs",
+                    source=STUB_SOURCE,
                     url=f"https://jobs.example.com/postings/{s['id']}",
                     title=truncate(str(s["title"]), 200),
                     text_excerpt=truncate(str(s["description"])),

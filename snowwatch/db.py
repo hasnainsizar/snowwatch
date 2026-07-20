@@ -11,7 +11,7 @@ from collections.abc import Iterable, Iterator
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 
-from .models import Signal
+from .models import STUB_SOURCE, Signal
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS signals (
@@ -37,15 +37,24 @@ CREATE INDEX IF NOT EXISTS idx_signals_category ON signals(category);
 
 @contextmanager
 def connect(db_path: str) -> Iterator[sqlite3.Connection]:
-    """Yield a configured connection with the schema applied."""
+    """Yield a configured connection with the schema applied and migrations run."""
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
     try:
         conn.executescript(_SCHEMA)
+        _migrate(conn)
         yield conn
         conn.commit()
     finally:
         conn.close()
+
+
+def _migrate(conn: sqlite3.Connection) -> None:
+    """Retag legacy stub job rows (jobs.example.com URLs) to the stub source."""
+    conn.execute(
+        "UPDATE signals SET source = ? WHERE source = 'jobs' AND url LIKE '%jobs.example.com%'",
+        (STUB_SOURCE,),
+    )
 
 
 def _to_iso(value: datetime) -> str:
@@ -102,12 +111,15 @@ def insert_signals(conn: sqlite3.Connection, signals: Iterable[Signal]) -> int:
     return inserted
 
 
-def signals_since(conn: sqlite3.Connection, days: int) -> list[Signal]:
+def signals_since(conn: sqlite3.Connection, days: int, include_stubs: bool = True) -> list[Signal]:
     """Return signals posted within the trailing window, highest score first."""
     cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+    stub_clause = "" if include_stubs else " AND source != ?"
+    params: tuple = (cutoff,) if include_stubs else (cutoff, STUB_SOURCE)
     rows = conn.execute(
-        "SELECT * FROM signals WHERE posted_at >= ? ORDER BY score DESC, posted_at DESC",
-        (cutoff,),
+        f"SELECT * FROM signals WHERE posted_at >= ?{stub_clause} "
+        "ORDER BY score DESC, posted_at DESC",
+        params,
     ).fetchall()
     return [_row_to_signal(r) for r in rows]
 
@@ -151,14 +163,18 @@ def counts_by_week(conn: sqlite3.Connection) -> list[tuple[str, int]]:
     return [(r["wk"], r["n"]) for r in rows]
 
 
-def count_posted_between(conn: sqlite3.Connection, start_days_ago: int, end_days_ago: int) -> int:
+def count_posted_between(
+    conn: sqlite3.Connection, start_days_ago: int, end_days_ago: int, include_stubs: bool = True
+) -> int:
     """Count signals posted in the window [now-start, now-end), start > end."""
     now = datetime.now(timezone.utc)
     start = (now - timedelta(days=start_days_ago)).isoformat()
     end = (now - timedelta(days=end_days_ago)).isoformat()
+    stub_clause = "" if include_stubs else " AND source != ?"
+    params: tuple = (start, end) if include_stubs else (start, end, STUB_SOURCE)
     row = conn.execute(
-        "SELECT COUNT(*) AS n FROM signals WHERE posted_at >= ? AND posted_at < ?",
-        (start, end),
+        f"SELECT COUNT(*) AS n FROM signals WHERE posted_at >= ? AND posted_at < ?{stub_clause}",
+        params,
     ).fetchone()
     return int(row["n"])
 
