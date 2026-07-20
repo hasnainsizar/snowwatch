@@ -13,6 +13,24 @@ def _seed(path, signals):
         db.insert_signals(conn, signals)
 
 
+def _scored(url: str, score: int, category: str) -> Signal:
+    return Signal(
+        source="hackernews",
+        url=url,
+        title="snowflake signal",
+        text_excerpt="warehouse cost",
+        author="a",
+        posted_at=datetime.now(timezone.utc),
+        score=score,
+        category=category,
+    )
+
+
+def _seed_raw(path, signals):
+    with db.connect(path) as conn:
+        db.insert_signals(conn, signals)
+
+
 def _inbound_signal() -> Signal:
     return Signal(
         source="reddit",
@@ -36,7 +54,8 @@ def test_top_signals_exclude_inbound_and_other(tmp_path, migration_signal):
     assert classifier.MIGRATION_INTENT in categories
 
 
-def test_inbound_still_visible_in_category_breakdown(tmp_path, migration_signal):
+def test_inbound_still_visible_in_category_breakdown(tmp_path, monkeypatch, migration_signal):
+    monkeypatch.setattr(config, "DIGEST_MIN_SCORE", 0)
     path = str(tmp_path / "t.db")
     _seed(path, [migration_signal, _inbound_signal()])
     with db.connect(path) as conn:
@@ -133,6 +152,63 @@ def test_new_companies_detected(tmp_path, migration_signal):
     with db.connect(path) as conn:
         data = digest.build_digest_data(conn, 7)
     assert "Northwind Analytics" in data.new_companies
+
+
+def test_low_score_suppressed_from_categories(tmp_path):
+    path = str(tmp_path / "t.db")
+    _seed_raw(path, [_scored("u1", 40, classifier.COST_PAIN), _scored("u2", 5, classifier.OTHER)])
+    with db.connect(path) as conn:
+        data = digest.build_digest_data(conn, 14)
+    assert classifier.COST_PAIN in data.by_category
+    assert classifier.OTHER not in data.by_category
+    assert data.suppressed_low_score == 1
+
+
+def test_min_score_configurable(tmp_path, monkeypatch):
+    monkeypatch.setattr(config, "DIGEST_MIN_SCORE", 0)
+    path = str(tmp_path / "t.db")
+    _seed_raw(path, [_scored("u1", 40, classifier.COST_PAIN), _scored("u2", 5, classifier.OTHER)])
+    with db.connect(path) as conn:
+        data = digest.build_digest_data(conn, 14)
+    assert classifier.OTHER in data.by_category
+    assert data.suppressed_low_score == 0
+
+
+def test_low_score_still_visible_in_stats(tmp_path):
+    path = str(tmp_path / "t.db")
+    _seed_raw(path, [_scored("u1", 40, classifier.COST_PAIN), _scored("u2", 5, classifier.OTHER)])
+    with db.connect(path) as conn:
+        assert db.total_count(conn) == 2
+        assert len(db.signals_since(conn, 14)) == 2
+
+
+def test_suppressed_footer_rendered(tmp_path):
+    path = str(tmp_path / "t.db")
+    _seed_raw(
+        path,
+        [
+            _scored("u1", 40, classifier.COST_PAIN),
+            _scored("u2", 5, classifier.OTHER),
+            _scored("u3", 2, classifier.OTHER),
+        ],
+    )
+    with db.connect(path) as conn:
+        data = digest.build_digest_data(conn, 14)
+        md = digest.render_markdown(data)
+        html = digest.render_html(data)
+    assert data.suppressed_low_score == 2
+    assert "2 low-score signals suppressed — see stats." in md
+    assert "2 low-score signals suppressed" in html
+
+
+def test_no_footer_when_none_suppressed(tmp_path):
+    path = str(tmp_path / "t.db")
+    _seed_raw(path, [_scored("u1", 40, classifier.COST_PAIN)])
+    with db.connect(path) as conn:
+        data = digest.build_digest_data(conn, 14)
+        md = digest.render_markdown(data)
+    assert data.suppressed_low_score == 0
+    assert "suppressed" not in md
 
 
 def test_write_digest_creates_files(tmp_path, cost_signal):
