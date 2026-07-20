@@ -44,14 +44,15 @@ def stats(db_path: str = _db_option()) -> None:
     """Show signal counts by source, category, and week."""
     with db.connect(db_path) as conn:
         total = db.total_count(conn)
-        by_source = db.counts_by(conn, "source")
+        by_source = db.source_summary(conn)
         by_category = db.counts_by(conn, "category")
         by_week = db.counts_by_week(conn)
 
     typer.echo(f"Total signals: {total}\n")
     typer.echo("By source:")
-    for name, n in by_source:
-        typer.echo(f"  {name:<14} {n}")
+    for name, n, last in by_source:
+        stamp = last.split(".")[0].replace("T", " ") if last else "never"
+        typer.echo(f"  {name:<14} {n:>5}   last: {stamp}")
     typer.echo("\nBy category:")
     for name, n in by_category:
         typer.echo(f"  {name:<22} {n}")

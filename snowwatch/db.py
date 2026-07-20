@@ -133,6 +133,15 @@ def counts_by(conn: sqlite3.Connection, column: str) -> list[tuple[str, int]]:
     return [(r["k"], r["n"]) for r in rows]
 
 
+def source_summary(conn: sqlite3.Connection) -> list[tuple[str, int, str | None]]:
+    """Per-source (source, count, last_collected_at), most signals first."""
+    rows = conn.execute(
+        "SELECT source, COUNT(*) AS n, MAX(collected_at) AS last "
+        "FROM signals GROUP BY source ORDER BY n DESC"
+    ).fetchall()
+    return [(r["source"], r["n"], r["last"]) for r in rows]
+
+
 def counts_by_week(conn: sqlite3.Connection) -> list[tuple[str, int]]:
     """Signal counts grouped by ISO year-week of posting, newest first."""
     rows = conn.execute(
