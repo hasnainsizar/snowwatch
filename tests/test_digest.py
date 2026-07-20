@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
-from snowwatch import classifier, db, digest
+from snowwatch import classifier, config, db, digest
 from snowwatch.models import Signal
 from snowwatch.pipeline import enrich
 
@@ -60,9 +60,51 @@ def test_markdown_renders(tmp_path, migration_signal, cost_signal):
     with db.connect(path) as conn:
         data = digest.build_digest_data(conn, 7)
         md = digest.render_markdown(data)
-    assert "Snowwatch Weekly Digest" in md
+    assert "Snowwatch Digest" in md
     assert "migrating off Snowflake" in md
     assert "MIGRATION_INTENT" in md
+
+
+def test_default_window_is_14():
+    assert config.DIGEST_WINDOW_DAYS == 14
+
+
+def test_template_wording_driven_by_days(tmp_path, cost_signal):
+    path = str(tmp_path / "t.db")
+    _seed(path, [cost_signal])
+    with db.connect(path) as conn:
+        md14 = digest.render_markdown(digest.build_digest_data(conn, 14))
+        md30 = digest.render_markdown(digest.build_digest_data(conn, 30))
+    assert "trailing 14 days" in md14
+    assert "trailing 30 days" in md30
+    assert "Weekly" not in md14
+    assert "this week" not in md14
+
+
+def test_trend_compares_equal_prior_period(tmp_path):
+    path = str(tmp_path / "t.db")
+    now = datetime.now(timezone.utc)
+    current = Signal(
+        source="hackernews", url="https://news.ycombinator.com/item?id=1",
+        title="snowflake bill too expensive", text_excerpt="our snowflake bill is too expensive",
+        author="a", posted_at=now - timedelta(days=1),
+    )
+    prior = Signal(
+        source="hackernews", url="https://news.ycombinator.com/item?id=2",
+        title="snowflake pricing shock", text_excerpt="snowflake pricing is too expensive",
+        author="b", posted_at=now - timedelta(days=12),
+    )
+    older = Signal(
+        source="hackernews", url="https://news.ycombinator.com/item?id=3",
+        title="snowflake cost", text_excerpt="snowflake bill too expensive",
+        author="c", posted_at=now - timedelta(days=30),
+    )
+    _seed(path, [current, prior, older])
+    with db.connect(path) as conn:
+        data = digest.build_digest_data(conn, 10)
+    assert data.total_signals == 1
+    assert data.prior_signals == 1
+    assert data.trend_delta == 0
 
 
 def test_html_renders_and_escapes(tmp_path, migration_signal):

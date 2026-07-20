@@ -3,7 +3,7 @@ from __future__ import annotations
 import httpx
 import pytest
 
-from snowwatch import config, db
+from snowwatch import classifier, config, db
 from snowwatch.collectors.stackexchange import StackExchangeCollector, strip_html
 from snowwatch.pipeline import enrich
 
@@ -135,3 +135,48 @@ def test_dedupe_against_existing_signals(tmp_path):
         second = db.insert_signals(conn, signals)
     assert first == 1
     assert second == 0
+
+
+def test_matched_terms_union_on_dedupe(monkeypatch):
+    monkeypatch.setattr(config, "STACKEXCHANGE_QUERY_TERMS", ["snowflake cost", "snowflake"])
+    client, _ = _mock_client(lambda term: {"items": [_item()], "quota_remaining": 9000})
+    signals = StackExchangeCollector().collect(client)
+    assert len(signals) == 1
+    assert signals[0].matched_terms == ["snowflake cost", "snowflake"]
+
+
+def test_bare_term_true_warehouse_scores(monkeypatch):
+    monkeypatch.setattr(config, "STACKEXCHANGE_QUERY_TERMS", ["snowflake"])
+    warehouse = _item(
+        title="Snowflake warehouse query is slow",
+        body="<p>My snowflake virtual warehouse runs a slow query that times out on a large table.</p>",
+        link="https://stackoverflow.com/q/wh",
+    )
+    client, _ = _mock_client(lambda term: {"items": [warehouse], "quota_remaining": 9000})
+    signals = enrich(StackExchangeCollector().collect(client))
+    assert signals[0].matched_terms == ["snowflake"]
+    assert signals[0].category == classifier.PERFORMANCE_COMPLAINT
+
+
+def test_bare_term_weather_false_match_is_other(monkeypatch):
+    monkeypatch.setattr(config, "STACKEXCHANGE_QUERY_TERMS", ["snowflake"])
+    weather = _item(
+        title="How to animate a snowflake falling in CSS",
+        body="<p>I want snowflakes drifting down a winter holiday page. The animation is frustrated by jitter.</p>",
+        link="https://stackoverflow.com/q/snow",
+    )
+    client, _ = _mock_client(lambda term: {"items": [weather], "quota_remaining": 9000})
+    signals = enrich(StackExchangeCollector().collect(client))
+    assert signals[0].category == classifier.OTHER
+
+
+def test_bare_term_cdp_false_match_is_other(monkeypatch):
+    monkeypatch.setattr(config, "STACKEXCHANGE_QUERY_TERMS", ["snowflake"])
+    cdp = _item(
+        title="Snowflake CDP audience not syncing",
+        body="<p>Our Snowflake customer data platform audience will not sync to the marketing destination.</p>",
+        link="https://stackoverflow.com/q/cdp",
+    )
+    client, _ = _mock_client(lambda term: {"items": [cdp], "quota_remaining": 9000})
+    signals = enrich(StackExchangeCollector().collect(client))
+    assert signals[0].category == classifier.OTHER
