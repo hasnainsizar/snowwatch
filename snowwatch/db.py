@@ -142,5 +142,17 @@ def counts_by_week(conn: sqlite3.Connection) -> list[tuple[str, int]]:
     return [(r["wk"], r["n"]) for r in rows]
 
 
+def count_posted_between(conn: sqlite3.Connection, start_days_ago: int, end_days_ago: int) -> int:
+    """Count signals posted in the window [now-start, now-end), start > end."""
+    now = datetime.now(timezone.utc)
+    start = (now - timedelta(days=start_days_ago)).isoformat()
+    end = (now - timedelta(days=end_days_ago)).isoformat()
+    row = conn.execute(
+        "SELECT COUNT(*) AS n FROM signals WHERE posted_at >= ? AND posted_at < ?",
+        (start, end),
+    ).fetchone()
+    return int(row["n"])
+
+
 def total_count(conn: sqlite3.Connection) -> int:
     return int(conn.execute("SELECT COUNT(*) AS n FROM signals").fetchone()["n"])
