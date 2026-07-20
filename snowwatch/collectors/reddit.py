@@ -1,10 +1,9 @@
-"""Reddit collector with two modes.
+"""Reddit collector, authenticated OAuth mode only.
 
-When REDDIT_CLIENT_ID / REDDIT_CLIENT_SECRET are set, it uses the official OAuth
-API (client-credentials flow, token cached until expiry, rate-limit headers
-honored). Without credentials it falls back to the public ``.json`` search
-endpoints, which many cloud IPs are blocked from (403). The active mode is
-logged. The collector interface is identical in both modes.
+Uses REDDIT_CLIENT_ID / REDDIT_CLIENT_SECRET with the client-credentials flow:
+token cached until expiry, rate-limit headers honored. It is disabled by default
+(see config.reddit_enabled); when enabled without credentials it errors rather
+than falling back to any public endpoint.
 """
 
 from __future__ import annotations
@@ -17,7 +16,7 @@ import httpx
 
 from .. import config
 from ..models import Signal
-from .base import CollectorError, polite_get, truncate
+from .base import CollectorError, truncate
 
 logger = logging.getLogger("snowwatch")
 
@@ -42,18 +41,14 @@ class RedditCollector:
         return bool(self._client_id and self._client_secret)
 
     def collect(self, client: httpx.Client) -> list[Signal]:
-        if self._authenticated:
-            logger.info("reddit: using authenticated OAuth API")
-            return self._collect(client, self._oauth_search)
-        logger.info("reddit: no credentials, using public .json fallback")
-        return self._collect(client, self._public_search)
-
-    def _collect(self, client: httpx.Client, search) -> list[Signal]:
+        if not self._authenticated:
+            raise CollectorError("reddit enabled but REDDIT_CLIENT_ID/REDDIT_CLIENT_SECRET are not set")
+        logger.info("reddit: using authenticated OAuth API")
         signals: list[Signal] = []
         seen: set[str] = set()
         for subreddit in config.SUBREDDITS:
             for term in config.QUERY_TERMS:
-                for post in search(client, subreddit, term):
+                for post in self._oauth_search(client, subreddit, term):
                     sig = self._to_signal(post, term)
                     if sig is None or sig.url in seen:
                         continue
@@ -122,17 +117,6 @@ class RedditCollector:
                 time.sleep(min(delay, 60.0))
         except ValueError:
             time.sleep(config.REQUEST_DELAY_SECONDS)
-
-    # --- Public fallback mode ---------------------------------------------
-
-    def _public_search(self, client: httpx.Client, subreddit: str, term: str) -> list[dict]:
-        url = f"{_PUBLIC_BASE}/r/{subreddit}/search.json"
-        resp = polite_get(
-            client,
-            url,
-            params={"q": term, "restrict_sr": 1, "sort": "new", "limit": 25, "t": "year"},
-        )
-        return [c.get("data", {}) for c in resp.json().get("data", {}).get("children", [])]
 
     # --- Normalization -----------------------------------------------------
 
