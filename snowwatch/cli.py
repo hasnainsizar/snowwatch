@@ -30,10 +30,10 @@ def collect(db_path: str = _db_option()) -> None:
 @app.command()
 def digest_cmd(
     db_path: str = _db_option(),
-    days: int = typer.Option(config.DIGEST_WINDOW_DAYS, "--days", help="Trailing window."),
+    days: int = typer.Option(config.DIGEST_WINDOW_DAYS, "--days", help="Trailing window in days."),
     out_dir: str = typer.Option("digests", "--out", help="Output directory."),
 ) -> None:
-    """Generate the weekly digest (markdown + HTML) for the trailing window."""
+    """Generate the digest (markdown + HTML) for the trailing window."""
     with db.connect(db_path) as conn:
         md_path, html_path = digest.write_digest(conn, days, out_dir)
     typer.echo(f"Digest written:\n  {md_path}\n  {html_path}")

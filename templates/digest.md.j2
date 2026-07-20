@@ -1,4 +1,4 @@
-# Snowwatch Weekly Digest
+# Snowwatch Digest — trailing {{ d.window_days }} days
 
 Generated {{ d.generated_at.strftime("%Y-%m-%d %H:%M UTC") }} · trailing {{ d.window_days }} days · {{ d.total_signals }} signals
 
@@ -37,7 +37,7 @@ _None detected this period._
 _None detected this period._
 {% endif %}
 
-## New companies detected this week
+## New companies detected this period
 
 {% if d.new_companies %}
 {% for company in d.new_companies %}
