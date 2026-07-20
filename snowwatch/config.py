@@ -49,7 +49,9 @@ QUERY_TERMS: list[str] = [
     "snowflake credits",
 ]
 
-# Stack Exchange advanced-search terms.
+# Stack Exchange advanced-search terms. The bare "snowflake" term collects every
+# recent Snowflake question; relevance is left to the scorer. The narrow phrases
+# stay so matched_terms records the specific angle when one hits.
 STACKEXCHANGE_QUERY_TERMS: list[str] = [
     "snowflake cost",
     "snowflake pricing",
@@ -57,6 +59,7 @@ STACKEXCHANGE_QUERY_TERMS: list[str] = [
     "snowflake performance",
     "migrate from snowflake",
     "snowflake alternative",
+    "snowflake",
 ]
 
 # Terms used specifically for job-posting collectors.
@@ -66,6 +69,10 @@ JOB_QUERY_TERMS: list[str] = [
     "cost optimization snowflake",
 ]
 
+# Default trailing window for the digest and its trend comparison. Configurable
+# per run via --days.
+DIGEST_WINDOW_DAYS: int = 14
+
 # --- Stack Exchange source settings ----------------------------------------
 STACKEXCHANGE_SITES: list[str] = ["stackoverflow", "dba.stackexchange.com"]
 # Built-in filter that includes question bodies so the scorer sees real text.
@@ -73,9 +80,10 @@ STACKEXCHANGE_FILTER: str = "withbody"
 STACKEXCHANGE_PAGESIZE: int = 25
 # Stop collecting once the remaining daily quota reaches this floor.
 STACKEXCHANGE_QUOTA_FLOOR: int = 5
-# Only fetch questions created within this trailing window, sorted newest first,
-# so results land inside the digest window rather than surfacing old top hits.
-STACKEXCHANGE_FROMDATE_DAYS: int = 30
+# Only fetch questions created within this trailing window, sorted newest first.
+# Derived to always cover at least the digest window so the digest can never ask
+# for a period the collector did not fetch; 30 is the observed signal cadence.
+STACKEXCHANGE_FROMDATE_DAYS: int = max(30, DIGEST_WINDOW_DAYS)
 
 # Subreddits searched by the reddit collector when it is enabled.
 SUBREDDITS: list[str] = ["dataengineering", "snowflake", "databricks"]
@@ -88,9 +96,6 @@ REQUEST_DELAY_SECONDS: float = 1.5
 
 # Per-request network timeout.
 REQUEST_TIMEOUT_SECONDS: float = 20.0
-
-# Trailing window used by the digest and stats commands.
-DIGEST_WINDOW_DAYS: int = 7
 
 # Default SQLite location relative to the current working directory.
 DEFAULT_DB_PATH: str = "snowwatch.db"
@@ -207,6 +212,41 @@ POSITIVE_CONTEXT_PHRASES: list[str] = [
     "no complaints",
     "works great",
     "recommend snowflake",
+]
+
+# Data-warehouse vocabulary that confirms a "snowflake" mention is about the
+# warehouse rather than snow/weather or the CDP product. A signal that carries no
+# displacement phrase and none of these terms is treated as off-topic and scored
+# to OTHER. Lowercase, substring match.
+DATA_CONTEXT_TERMS: list[str] = [
+    "warehouse",
+    "data warehouse",
+    "sql",
+    "query",
+    "queries",
+    "table",
+    "schema",
+    "database",
+    "column",
+    "etl",
+    "elt",
+    "dbt",
+    "pipeline",
+    "redshift",
+    "bigquery",
+    "databricks",
+    "credits",
+    "compute",
+    "cluster",
+    "snowsql",
+    "snowpark",
+    "dwh",
+    "ingest",
+    "partition",
+    "stored procedure",
+    "materialized view",
+    "select statement",
+    "join",
 ]
 
 # Technology, vendor, and cloud terms that are frequently capitalized in this

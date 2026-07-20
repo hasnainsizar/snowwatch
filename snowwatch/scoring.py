@@ -33,6 +33,10 @@ _SUFFIX_RE = re.compile(r"[\s,]+(?:Inc|LLC|Ltd|Corp|Corporation|Co)\.?$", re.IGN
 # Buckets suppressed when a positive-sentiment phrase is present.
 _POSITIVE_SUPPRESSED = ("cost_pain", "performance_complaint", "general_negativity")
 
+# Buckets whose phrases are specific enough to establish the data-warehouse topic
+# on their own, independent of the data-context vocabulary check.
+_TOPIC_BUCKETS = frozenset({"migration_intent", "cost_pain", "performance_complaint"})
+
 
 @dataclass(slots=True)
 class Analysis:
@@ -41,6 +45,11 @@ class Analysis:
     buckets: dict[str, list[str]]
     inbound: bool
     positive: bool
+    off_topic: bool
+
+
+def _has_data_context(content: str) -> bool:
+    return any(term in content for term in config.DATA_CONTEXT_TERMS)
 
 
 def matched_phrases(content: str) -> dict[str, list[str]]:
@@ -54,10 +63,13 @@ def matched_phrases(content: str) -> dict[str, list[str]]:
 
 
 def analyze(content: str) -> Analysis:
-    """Resolve effective phrase buckets after direction and sentiment guards.
+    """Resolve effective phrase buckets after direction, sentiment, and topic guards.
 
     Inbound (moving TO Snowflake) without an explicit outbound phrase drops the
-    migration bucket; positive sentiment drops the pain buckets.
+    migration bucket; positive sentiment drops the pain buckets. A signal with no
+    topic-establishing bucket and no data-warehouse vocabulary is off-topic (e.g.
+    snow/weather or the CDP product): its buckets and inbound flag are cleared so
+    it scores to OTHER.
     """
     raw = matched_phrases(content)
     outbound = "migration_intent" in raw
@@ -70,7 +82,12 @@ def analyze(content: str) -> Analysis:
     if positive:
         for bucket in _POSITIVE_SUPPRESSED:
             buckets.pop(bucket, None)
-    return Analysis(buckets=buckets, inbound=inbound, positive=positive)
+
+    on_topic = inbound or bool(_TOPIC_BUCKETS & buckets.keys()) or _has_data_context(content)
+    off_topic = not on_topic
+    if off_topic:
+        buckets = {}
+    return Analysis(buckets=buckets, inbound=inbound, positive=positive, off_topic=off_topic)
 
 
 def normalize_company(name: str) -> str:

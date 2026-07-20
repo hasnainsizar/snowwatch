@@ -31,6 +31,13 @@ def strip_html(html: str) -> str:
     return " ".join(unescape(_TAG_RE.sub(" ", html)).split())
 
 
+def _merge_terms(signal: Signal, terms: list[str]) -> None:
+    """Union new matched terms into an existing signal, preserving order."""
+    for term in terms:
+        if term not in signal.matched_terms:
+            signal.matched_terms.append(term)
+
+
 class StackExchangeCollector:
     name = "stackexchange"
 
@@ -38,17 +45,19 @@ class StackExchangeCollector:
         self._key = key if key is not None else config.STACKEXCHANGE_KEY
 
     def collect(self, client: httpx.Client) -> list[Signal]:
-        signals: list[Signal] = []
-        seen: set[str] = set()
+        by_url: dict[str, Signal] = {}
         for site in config.STACKEXCHANGE_SITES:
             for term in config.STACKEXCHANGE_QUERY_TERMS:
                 payload = self._search(client, site, term)
                 for item in payload.get("items", []):
                     sig = self._to_signal(item, term)
-                    if sig is None or sig.url in seen:
+                    if sig is None:
                         continue
-                    seen.add(sig.url)
-                    signals.append(sig)
+                    existing = by_url.get(sig.url)
+                    if existing is None:
+                        by_url[sig.url] = sig
+                    else:
+                        _merge_terms(existing, sig.matched_terms)
 
                 backoff = payload.get("backoff")
                 if backoff:
@@ -60,8 +69,8 @@ class StackExchangeCollector:
                         "stackexchange: quota nearly exhausted (%s remaining), stopping early",
                         remaining,
                     )
-                    return signals
-        return signals
+                    return list(by_url.values())
+        return list(by_url.values())
 
     def _search(self, client: httpx.Client, site: str, term: str) -> dict:
         fromdate = datetime.now(timezone.utc) - timedelta(days=config.STACKEXCHANGE_FROMDATE_DAYS)
