@@ -9,7 +9,6 @@ collector switches to :class:`AdzunaJobSource` automatically.
 
 from __future__ import annotations
 
-import os
 from datetime import datetime, timedelta, timezone
 from typing import Protocol
 
@@ -132,10 +131,8 @@ class AdzunaJobSource:
 
 def default_job_source() -> JobSource:
     """Pick a live source when credentials exist, else the offline stub."""
-    app_id = os.environ.get("ADZUNA_APP_ID")
-    app_key = os.environ.get("ADZUNA_APP_KEY")
-    if app_id and app_key:
-        return AdzunaJobSource(app_id, app_key)
+    if config.ADZUNA_APP_ID and config.ADZUNA_APP_KEY:
+        return AdzunaJobSource(config.ADZUNA_APP_ID, config.ADZUNA_APP_KEY)
     return StubJobSource()
 
 
