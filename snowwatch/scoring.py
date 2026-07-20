@@ -108,6 +108,8 @@ def _is_valid_company(candidate: str, allow_acronym: bool) -> bool:
     if not allow_acronym and candidate.isupper():
         return False
     denylist = {d.casefold() for d in config.COMPANY_DENYLIST}
+    if candidate.casefold() in denylist:
+        return False
     for token in candidate.split():
         bare = token.strip(".,").casefold()
         if bare in denylist:
@@ -183,6 +185,7 @@ def score_signal(signal: Signal) -> int:
         total -= config.WEIGHTS["migration_inbound_penalty"]
 
     if signal.company is None:
+        # Extract from signal text only; the author field is never a company source.
         signal.company = extract_company(f"{signal.title}\n{signal.text_excerpt}")
     if signal.company:
         total += config.WEIGHTS["company_detected"]
