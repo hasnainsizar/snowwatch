@@ -83,13 +83,17 @@ def _clean_candidate(raw: str) -> str:
     return " ".join(raw.split()).strip(" .,-")
 
 
-def _is_valid_company(candidate: str) -> bool:
+def _is_valid_company(candidate: str, allow_acronym: bool) -> bool:
     if len(candidate) < 2:
         return False
-    tokens = candidate.split()
-    for token in tokens:
+    # Bare capitalization treats an all-caps token as a keyword/acronym, not a
+    # name; only context evidence can promote one (e.g. "we at IBM").
+    if not allow_acronym and candidate.isupper():
+        return False
+    denylist = {d.casefold() for d in config.COMPANY_DENYLIST}
+    for token in candidate.split():
         bare = token.strip(".,").casefold()
-        if bare in {d.casefold() for d in config.COMPANY_DENYLIST}:
+        if bare in denylist:
             return False
         if token in config.COMPANY_STOPWORDS:
             return False
@@ -101,19 +105,19 @@ def extract_company(text: str) -> str | None:
 
     Tier 1: explicit context ("we at X", "X's data team", "at X", legal suffix)
     counts on a single match. Tier 2: bare capitalization must recur (2+ times)
-    in the same text before it is trusted. Denylisted tech/vendor terms and
-    common capitalized words are rejected at every tier.
+    and is not trusted for all-caps keywords. Denylisted tech/vendor/SQL terms
+    and common capitalized words are rejected at every tier.
     """
     for pattern in _CONTEXT_PATTERNS:
         for match in pattern.finditer(text):
             candidate = _clean_candidate(match.group(1))
-            if _is_valid_company(candidate):
+            if _is_valid_company(candidate, allow_acronym=True):
                 return candidate
 
     counts: Counter[str] = Counter()
     for match in _CAP_TOKEN_RE.finditer(text):
         candidate = _clean_candidate(match.group(0))
-        if _is_valid_company(candidate):
+        if _is_valid_company(candidate, allow_acronym=False):
             counts[candidate] += 1
     for candidate, occurrences in counts.most_common():
         if occurrences >= 2:
