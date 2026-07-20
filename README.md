@@ -23,18 +23,15 @@ they have the exact problem you solve.
 
 ## Data sources
 
+Three live sources run by default, none requiring authentication:
+
 - **Hacker News** via the public Algolia API (`hn.algolia.com/api`). Searches
   comments and stories for the configured cost/migration terms.
-- **Reddit** across r/dataengineering, r/snowflake, and r/databricks. Two modes,
-  chosen automatically and logged at run time:
-  - **Authenticated** (preferred): set `REDDIT_CLIENT_ID` and
-    `REDDIT_CLIENT_SECRET` to use the official OAuth API (client-credentials
-    flow, token cached until expiry, rate-limit headers honored). See
-    [Reddit setup](#reddit-setup).
-  - **Public fallback**: with no credentials it uses the public `.json` search
-    endpoints with a descriptive User-Agent and a courtesy delay. Many
-    datacenter/cloud IPs get a 403 here; when that happens the source is logged
-    and skipped and the rest of the run continues.
+- **Stack Exchange** via the public API 2.3 (`api.stackexchange.com`), across
+  Stack Overflow and dba.stackexchange. Uses `/search/advanced` with term-style
+  queries and pulls question bodies (HTML stripped) so the scorer has real text.
+  Honors the API's mandatory `backoff` field and stops early if `quota_remaining`
+  runs low. An optional `STACKEXCHANGE_KEY` raises the quota but is not required.
 - **Job postings** via a pluggable `JobSource`. With no credentials it uses an
   offline stub so the pipeline always runs. Set `ADZUNA_APP_ID` and
   `ADZUNA_APP_KEY` in the environment to switch to live Adzuna data
@@ -42,6 +39,18 @@ they have the exact problem you solve.
 
 If any single source fails, snowwatch logs the error and continues with the
 others.
+
+### Reddit collector (built, gated)
+
+The Reddit collector is fully implemented — official OAuth (client-credentials
+flow), token caching until expiry, and rate-limit backoff — but it is disabled by
+default. Reddit's Data API now requires prior approval under their Responsible
+Builder Policy, so shipping it on by default would send unauthorized traffic.
+Enabling it takes approved `REDDIT_CLIENT_ID` / `REDDIT_CLIENT_SECRET` credentials
+plus the `SNOWWATCH_ENABLE_REDDIT=1` flag (or adding `reddit` to
+`ENABLED_COLLECTORS` in `config.py`). While disabled, `collect` logs a single
+`reddit: disabled` line and makes no network calls. Existing Reddit signals
+already in the database remain valid history.
 
 ## Setup
 
@@ -53,17 +62,16 @@ pip install -e ".[dev]"
 
 Requires Python 3.11+.
 
-Optional credentials unlock the authenticated Reddit API and live job postings.
-Copy `.env.example` to `.env`, fill in what you have, and export it before
-running (`set -a; source .env; set +a`). Everything runs without credentials —
-Reddit falls back to the public endpoints and jobs use an offline stub.
+All three default sources run with no credentials. The variables below are
+optional. Copy `.env.example` to `.env`, fill in what you have, and export it
+before running (`set -a; source .env; set +a`).
 
-| Variable                | Enables                                  |
-|-------------------------|------------------------------------------|
-| `REDDIT_CLIENT_ID`      | Reddit OAuth API (avoids the 403 fallback) |
-| `REDDIT_CLIENT_SECRET`  | "                                        |
-| `ADZUNA_APP_ID`         | Live Adzuna job postings                 |
-| `ADZUNA_APP_KEY`        | "                                        |
+| Variable                  | Effect                                        |
+|---------------------------|-----------------------------------------------|
+| `STACKEXCHANGE_KEY`       | Raises the Stack Exchange request quota        |
+| `ADZUNA_APP_ID` / `_KEY`  | Live Adzuna job postings instead of the stub   |
+| `SNOWWATCH_ENABLE_REDDIT` | Set to `1` to enable the gated Reddit collector |
+| `REDDIT_CLIENT_ID` / `_SECRET` | Reddit OAuth creds; only used when enabled |
 
 ## Usage
 
@@ -176,29 +184,32 @@ bare capitalization requires repetition and still yields the occasional false
 name or misses a lowercase-styled brand. Treat the company field as a lead, not
 ground truth, and expect the denylist to need occasional additions.
 
-**Reddit auth modes.** With credentials the OAuth API is stable and rate-limit
-aware. Without them the public `.json` fallback works from residential IPs but
-returns 403 from many cloud/datacenter IPs; that failure is logged and skipped,
-so a keyless run in the cloud simply collects no Reddit signals.
+**Reddit gating.** The Reddit collector is OAuth-only and off by default because
+the Data API requires prior approval. Enabled with approved credentials it is
+stable and rate-limit aware; enabled without credentials it errors cleanly and is
+logged and skipped. See [Reddit setup](#reddit-setup).
 
 ## Reddit setup
 
-Authenticated Reddit access takes about two minutes and avoids the public-endpoint
-403s:
+Reddit is disabled by default. To enable it you need approved Data API access
+plus the env flag:
 
-1. Go to <https://www.reddit.com/prefs/apps> and create an app of type
-   **script**. Any name works; set the redirect URI to `http://localhost`.
+1. Get your app approved and create an app of type **script** at
+   <https://www.reddit.com/prefs/apps> (redirect URI `http://localhost`).
 2. Copy the client id (under the app name) and the secret.
-3. Export them before running:
+3. Export the credentials and the enable flag before running:
 
    ```bash
+   export SNOWWATCH_ENABLE_REDDIT=1
    export REDDIT_CLIENT_ID=your_id
    export REDDIT_CLIENT_SECRET=your_secret
    snowwatch collect
    ```
 
-The collector logs `reddit: using authenticated OAuth API` when the credentials
-are picked up, or `reddit: no credentials, using public .json fallback` otherwise.
+Enabled, the collector logs `reddit: using authenticated OAuth API`. Left
+disabled, `collect` logs a single `reddit: disabled (requires approved Reddit
+Data API access)` line and makes no Reddit network calls. Enabling it without
+credentials raises a clear error that is logged and skipped.
 
 ## Adding a job API key
 
@@ -221,9 +232,11 @@ from `default_job_source()`.
 
 ## Configuration
 
-Edit `snowwatch/config.py` to change query terms, subreddits, scoring weights,
-the phrase buckets, request delays, and the digest window. No other file needs
-to change for tuning.
+Edit `snowwatch/config.py` to change per-source query terms, scoring weights, the
+phrase buckets, request delays, the digest window, and which collectors run.
+`ENABLED_COLLECTORS` lists the active sources; `reddit_enabled()` gates the Reddit
+collector behind that list or the `SNOWWATCH_ENABLE_REDDIT` flag. No other file
+needs to change for tuning.
 
 ## Tests
 
@@ -231,16 +244,17 @@ to change for tuning.
 pytest
 ```
 
-Covers scoring order and bounds, company extraction, dedupe, classification, and
-digest rendering against fixture data.
+Covers scoring order and bounds, company extraction, dedupe, classification,
+collector normalization (Stack Exchange and Reddit against fixture responses),
+the Reddit gating logic, and digest rendering.
 
 ## Project layout
 
 ```
 snowwatch/
-  config.py         query terms, weights, phrase buckets
+  config.py         per-source query terms, weights, phrase buckets, enabled set
   models.py         Signal dataclass + url hashing
-  collectors/       one collector per source + pluggable JobSource
+  collectors/       hackernews, stackexchange, jobs, reddit (gated) + registry
   scoring.py        rule-based score + company extraction
   classifier.py     single-category tagging
   db.py             SQLite storage, dedupe, queries

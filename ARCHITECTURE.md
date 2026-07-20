@@ -7,9 +7,12 @@ the digest reads back the trailing window and renders it.
 ## Data flow
 
 ```
-                 +-------------------------------------------+
+   ENABLED_COLLECTORS + reddit_enabled()  -->  enabled_collectors()
+                                       |
+                 +---------------------v---------------------+
                  |                collectors/                |
-                 |  hackernews   reddit(oauth|public)  jobs  |
+                 |  hackernews   stackexchange   jobs        |
+                 |  reddit(oauth) ...... gated, off default  |
                  +---------------------+---------------------+
                                        | list[Signal]
                                        v
@@ -31,6 +34,12 @@ the digest reads back the trailing window and renders it.
                           +------------------------+
 ```
 
+The three default sources (hackernews, stackexchange, jobs) all run without
+authentication. Reddit is built but gated: `config.reddit_enabled()` adds it only
+when it appears in `ENABLED_COLLECTORS` or `SNOWWATCH_ENABLE_REDDIT` is set. When
+gated off, `pipeline.collect_all` logs one `reddit: disabled` line and makes no
+network calls.
+
 Each stage is pure and independently testable:
 
 - `scoring.analyze()` resolves direction (inbound vs outbound migration) and
@@ -51,7 +60,10 @@ Each stage is pure and independently testable:
    unified error handling.
 2. Raise `CollectorError` on failure. `pipeline.collect_all` logs it and
    continues with the other sources, so one bad source never aborts a run.
-3. Register the class in `ALL_COLLECTORS` in `snowwatch/collectors/__init__.py`.
+3. Register the class in `COLLECTOR_REGISTRY` in
+   `snowwatch/collectors/__init__.py` and add its name to `ENABLED_COLLECTORS`
+   in `config.py`. A source can be shipped disabled by leaving it out of the
+   default list and gating it behind an env flag, as the Reddit collector does.
 4. Put any query terms, endpoints, or credentials in `config.py` rather than the
    collector body.
 
