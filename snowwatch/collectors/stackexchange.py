@@ -9,26 +9,20 @@ watched so a run stops before exhausting the daily quota.
 from __future__ import annotations
 
 import logging
-import re
 import time
 from datetime import datetime, timedelta, timezone
-from html import unescape
 
 import httpx
 
 from .. import config
 from ..models import Signal
-from .base import CollectorError, polite_get, truncate
+from .base import CollectorError, polite_get, strip_html, truncate
 
 logger = logging.getLogger("snowwatch")
 
 _API = "https://api.stackexchange.com/2.3/search/advanced"
-_TAG_RE = re.compile(r"<[^>]+>")
 
-
-def strip_html(html: str) -> str:
-    """Remove tags, unescape entities, and collapse whitespace."""
-    return " ".join(unescape(_TAG_RE.sub(" ", html)).split())
+__all__ = ["StackExchangeCollector", "strip_html"]
 
 
 def _merge_terms(signal: Signal, terms: list[str]) -> None:

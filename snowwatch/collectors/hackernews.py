@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timezone
 
 import httpx
@@ -10,7 +11,14 @@ from .. import config
 from ..models import Signal
 from .base import CollectorError, polite_get, truncate
 
+logger = logging.getLogger("snowwatch")
+
 _API = "https://hn.algolia.com/api/v1/search_by_date"
+
+
+def _is_excluded_thread(title: str) -> bool:
+    lowered = title.lower()
+    return any(marker in lowered for marker in config.HN_TITLE_EXCLUSIONS)
 
 
 class HackerNewsCollector:
@@ -46,6 +54,9 @@ class HackerNewsCollector:
         if not object_id:
             return None
         title = hit.get("title") or hit.get("story_title") or "(HN comment)"
+        if _is_excluded_thread(title) or _is_excluded_thread(hit.get("story_title") or ""):
+            logger.debug("hackernews: skipping recurring thread %r", title)
+            return None
         body = hit.get("comment_text") or hit.get("story_text") or hit.get("title") or ""
         if not body.strip():
             return None

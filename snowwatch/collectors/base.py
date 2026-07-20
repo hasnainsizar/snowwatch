@@ -2,13 +2,17 @@
 
 from __future__ import annotations
 
+import re
 import time
+from html import unescape
 from typing import Protocol, runtime_checkable
 
 import httpx
 
 from .. import config
 from ..models import Signal
+
+_TAG_RE = re.compile(r"<[^>]+>")
 
 
 class CollectorError(Exception):
@@ -46,9 +50,14 @@ def polite_get(client: httpx.Client, url: str, **kwargs) -> httpx.Response:
         raise CollectorError(f"GET {url} failed: {exc}") from exc
 
 
+def strip_html(text: str) -> str:
+    """Strip tags, decode entities (e.g. &#x2F;), and collapse whitespace."""
+    return " ".join(unescape(_TAG_RE.sub(" ", text)).split())
+
+
 def truncate(text: str, limit: int = 500) -> str:
-    """Collapse whitespace and cap excerpt length."""
-    cleaned = " ".join(text.split())
+    """Normalize to plain text (HTML stripped) and cap length."""
+    cleaned = strip_html(text)
     if len(cleaned) <= limit:
         return cleaned
     return cleaned[: limit - 1].rstrip() + "…"
