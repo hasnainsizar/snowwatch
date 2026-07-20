@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 import pytest
 
-from snowwatch.scoring import extract_company, normalize_company
+from snowwatch.models import Signal
+from snowwatch.scoring import extract_company, normalize_company, score_signal
 
 
 @pytest.mark.parametrize(
@@ -15,6 +18,33 @@ from snowwatch.scoring import extract_company, normalize_company
 )
 def test_denylisted_tech_rejected(text):
     assert extract_company(text) is None
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "We run PySpark jobs on the cluster",
+        "Migrated the tables to Delta Lake last quarter",
+        "Governance is handled by Unity Catalog now",
+        "We track experiments with MLflow and deploy on Kubernetes",
+        "Infra is all Terraform, models served on Bedrock",
+    ],
+)
+def test_new_denylist_terms_rejected(text):
+    assert extract_company(text) is None
+
+
+def test_author_field_not_used_for_company():
+    sig = Signal(
+        source="hackernews",
+        url="https://news.ycombinator.com/item?id=au1",
+        title="Our snowflake bill is too expensive",
+        text_excerpt="the warehouse credits keep climbing with no company named here",
+        author="Bigcorp Industries",
+        posted_at=datetime.now(timezone.utc),
+    )
+    score_signal(sig)
+    assert sig.company is None
 
 
 def test_context_pattern_extracts_company():
