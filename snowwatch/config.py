@@ -73,6 +73,9 @@ STACKEXCHANGE_FILTER: str = "withbody"
 STACKEXCHANGE_PAGESIZE: int = 25
 # Stop collecting once the remaining daily quota reaches this floor.
 STACKEXCHANGE_QUOTA_FLOOR: int = 5
+# Only fetch questions created within this trailing window, sorted newest first,
+# so results land inside the digest window rather than surfacing old top hits.
+STACKEXCHANGE_FROMDATE_DAYS: int = 30
 
 # Subreddits searched by the reddit collector when it is enabled.
 SUBREDDITS: list[str] = ["dataengineering", "snowflake", "databricks"]

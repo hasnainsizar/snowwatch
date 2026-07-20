@@ -11,7 +11,7 @@ from __future__ import annotations
 import logging
 import re
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from html import unescape
 
 import httpx
@@ -64,12 +64,14 @@ class StackExchangeCollector:
         return signals
 
     def _search(self, client: httpx.Client, site: str, term: str) -> dict:
+        fromdate = datetime.now(timezone.utc) - timedelta(days=config.STACKEXCHANGE_FROMDATE_DAYS)
         params = {
             "q": term,
             "site": site,
             "filter": config.STACKEXCHANGE_FILTER,
-            "sort": "relevance",
+            "sort": "creation",
             "order": "desc",
+            "fromdate": int(fromdate.timestamp()),
             "pagesize": config.STACKEXCHANGE_PAGESIZE,
         }
         if self._key:

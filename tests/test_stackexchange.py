@@ -51,6 +51,27 @@ def test_strip_html():
     assert strip_html("") == ""
 
 
+def test_recency_query_params(monkeypatch):
+    from datetime import datetime, timezone
+
+    captured: list[dict[str, str]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured.append(dict(request.url.params))
+        return httpx.Response(200, json={"items": [], "quota_remaining": 9000})
+
+    monkeypatch.setattr(config, "STACKEXCHANGE_FROMDATE_DAYS", 30)
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    StackExchangeCollector().collect(client)
+
+    params = captured[0]
+    assert params["sort"] == "creation"
+    assert params["order"] == "desc"
+    floor = int((datetime.now(timezone.utc).timestamp())) - 31 * 86400
+    ceil = int((datetime.now(timezone.utc).timestamp())) - 29 * 86400
+    assert floor <= int(params["fromdate"]) <= ceil
+
+
 def test_normalization():
     client, _ = _mock_client(lambda term: {"items": [_item()], "quota_remaining": 9000})
     signals = StackExchangeCollector().collect(client)
