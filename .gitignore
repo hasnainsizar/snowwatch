@@ -7,3 +7,4 @@ __pycache__/
 *.db
 digests/
 .DS_Store
+.claude/
