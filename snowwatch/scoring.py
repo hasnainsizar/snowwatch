@@ -1,22 +1,46 @@
-"""Rule-based relevance scoring and company-name extraction.
+"""Rule-based relevance scoring, direction analysis, and company extraction.
 
 Fully offline: no model calls. Scores range 0-100 and reward, in order,
-explicit migration intent, cost complaints, then softer negativity signals.
+explicit outbound migration intent, cost complaints, then softer negativity.
+Inbound migration ("moving TO Snowflake") and positive sentiment are detected
+and neutralized so they do not read as displacement pain.
 """
 
 from __future__ import annotations
 
 import re
+from collections import Counter
+from dataclasses import dataclass
 from datetime import datetime, timezone
 
 from . import config
 from .models import Signal
 
-_WE_AT_RE = re.compile(r"\bwe(?:'re)? at ([A-Z][A-Za-z0-9&.\-]+(?: [A-Z][A-Za-z0-9&.\-]+)?)")
-_AT_COMPANY_RE = re.compile(r"\b(?:at|for|from|joined|work at) ([A-Z][A-Za-z0-9&.\-]{2,}(?: [A-Z][A-Za-z0-9&.\-]+)?)")
+_WE_AT_RE = re.compile(r"\bwe(?:'re| are)? (?:at|with) ([A-Z][A-Za-z0-9&.\-]+(?: [A-Z][A-Za-z0-9&.\-]+)?)")
+_TEAM_RE = re.compile(r"\b([A-Z][A-Za-z0-9&.\-]+(?: [A-Z][A-Za-z0-9&.\-]+)?)'s (?:data|analytics|engineering|platform) team")
+_AT_COMPANY_RE = re.compile(r"\b(?:at|joined|work at|working at) ([A-Z][A-Za-z0-9&.\-]{2,}(?: [A-Z][A-Za-z0-9&.\-]+)?)")
 _ORG_SUFFIX_RE = re.compile(
     r"\b([A-Z][A-Za-z0-9&.\-]+(?: [A-Z][A-Za-z0-9&.\-]+)?)\s+(?:Inc|LLC|Ltd|Corp|Corporation|Technologies|Labs|Systems|Software|Analytics)\b"
 )
+# High-confidence context patterns; a single match is enough.
+_CONTEXT_PATTERNS = (_WE_AT_RE, _TEAM_RE, _AT_COMPANY_RE, _ORG_SUFFIX_RE)
+
+# Bare capitalized token(s); needs repetition to count as evidence.
+_CAP_TOKEN_RE = re.compile(r"\b[A-Z][A-Za-z0-9&.\-]+(?: [A-Z][A-Za-z0-9&.\-]+)?\b")
+
+_SUFFIX_RE = re.compile(r"[\s,]+(?:Inc|LLC|Ltd|Corp|Corporation|Co)\.?$", re.IGNORECASE)
+
+# Buckets suppressed when a positive-sentiment phrase is present.
+_POSITIVE_SUPPRESSED = ("cost_pain", "performance_complaint", "general_negativity")
+
+
+@dataclass(slots=True)
+class Analysis:
+    """Direction- and sentiment-aware view of a signal's phrase matches."""
+
+    buckets: dict[str, list[str]]
+    inbound: bool
+    positive: bool
 
 
 def matched_phrases(content: str) -> dict[str, list[str]]:
@@ -29,20 +53,70 @@ def matched_phrases(content: str) -> dict[str, list[str]]:
     return hits
 
 
-def extract_company(text: str) -> str | None:
-    """Best-effort company name from free text using capitalization heuristics.
+def analyze(content: str) -> Analysis:
+    """Resolve effective phrase buckets after direction and sentiment guards.
 
-    Tries explicit "we at X" / "at X" patterns first, then a legal-suffix
-    pattern. Returns None when nothing survives the stopword filter.
+    Inbound (moving TO Snowflake) without an explicit outbound phrase drops the
+    migration bucket; positive sentiment drops the pain buckets.
     """
-    for pattern in (_WE_AT_RE, _AT_COMPANY_RE, _ORG_SUFFIX_RE):
+    raw = matched_phrases(content)
+    outbound = "migration_intent" in raw
+    inbound = any(p in content for p in config.MIGRATION_INBOUND_PHRASES) and not outbound
+    positive = any(p in content for p in config.POSITIVE_CONTEXT_PHRASES)
+
+    buckets = dict(raw)
+    if inbound:
+        buckets.pop("migration_intent", None)
+    if positive:
+        for bucket in _POSITIVE_SUPPRESSED:
+            buckets.pop(bucket, None)
+    return Analysis(buckets=buckets, inbound=inbound, positive=positive)
+
+
+def normalize_company(name: str) -> str:
+    """Collapse whitespace and strip legal suffixes for dedupe comparison."""
+    collapsed = " ".join(name.split())
+    return _SUFFIX_RE.sub("", collapsed).strip(" ,.")
+
+
+def _clean_candidate(raw: str) -> str:
+    return " ".join(raw.split()).strip(" .,-")
+
+
+def _is_valid_company(candidate: str) -> bool:
+    if len(candidate) < 2:
+        return False
+    tokens = candidate.split()
+    for token in tokens:
+        bare = token.strip(".,").casefold()
+        if bare in {d.casefold() for d in config.COMPANY_DENYLIST}:
+            return False
+        if token in config.COMPANY_STOPWORDS:
+            return False
+    return candidate not in config.COMPANY_STOPWORDS
+
+
+def extract_company(text: str) -> str | None:
+    """Extract a company name using confidence tiers.
+
+    Tier 1: explicit context ("we at X", "X's data team", "at X", legal suffix)
+    counts on a single match. Tier 2: bare capitalization must recur (2+ times)
+    in the same text before it is trusted. Denylisted tech/vendor terms and
+    common capitalized words are rejected at every tier.
+    """
+    for pattern in _CONTEXT_PATTERNS:
         for match in pattern.finditer(text):
-            candidate = match.group(1).strip(" .,-")
-            head = candidate.split()[0]
-            if head in config.COMPANY_STOPWORDS:
-                continue
-            if candidate in config.COMPANY_STOPWORDS:
-                continue
+            candidate = _clean_candidate(match.group(1))
+            if _is_valid_company(candidate):
+                return candidate
+
+    counts: Counter[str] = Counter()
+    for match in _CAP_TOKEN_RE.finditer(text):
+        candidate = _clean_candidate(match.group(0))
+        if _is_valid_company(candidate):
+            counts[candidate] += 1
+    for candidate, occurrences in counts.most_common():
+        if occurrences >= 2:
             return candidate
     return None
 
@@ -63,26 +137,29 @@ def _recency_bonus(posted_at: datetime) -> int:
 def score_signal(signal: Signal) -> int:
     """Compute the 0-100 relevance score and mutate the signal in place.
 
-    Also fills ``matched_terms`` (from configured phrases) and ``company`` when
+    Also fills ``matched_terms`` (from effective buckets) and ``company`` when
     they are not already populated by the collector.
     """
-    content = signal.content
-    hits = matched_phrases(content)
+    analysis = analyze(signal.content)
+    buckets = analysis.buckets
 
     if not signal.matched_terms:
-        signal.matched_terms = sorted({p for phrases in hits.values() for p in phrases})
+        signal.matched_terms = sorted({p for phrases in buckets.values() for p in phrases})
 
     total = 0
-    if "migration_intent" in hits:
+    if "migration_intent" in buckets:
         total += config.WEIGHTS["migration_intent"]
-    if "cost_pain" in hits:
+    if "cost_pain" in buckets:
         total += config.WEIGHTS["cost_pain"]
-    if "performance_complaint" in hits:
+    if "performance_complaint" in buckets:
         total += config.WEIGHTS["performance_complaint"]
-    if "vendor_comparison" in hits:
+    if "vendor_comparison" in buckets:
         total += config.WEIGHTS["vendor_comparison"]
-    if "general_negativity" in hits:
+    if "general_negativity" in buckets:
         total += config.WEIGHTS["general_negativity"]
+
+    if analysis.inbound:
+        total -= config.WEIGHTS["migration_inbound_penalty"]
 
     if signal.company is None:
         signal.company = extract_company(f"{signal.title}\n{signal.text_excerpt}")
