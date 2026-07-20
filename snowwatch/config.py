@@ -9,16 +9,36 @@ from __future__ import annotations
 import os
 
 # --- Credentials (read from environment, never hard-coded) -----------------
-# Reddit script-app credentials enable the authenticated API; absent, the
-# collector falls back to the public JSON endpoints. Adzuna keys switch the job
-# collector from the offline stub to live postings.
+# Reddit script-app credentials enable the authenticated API; they only matter
+# when the reddit collector is enabled. Adzuna keys switch the job collector
+# from the offline stub to live postings. The Stack Exchange key is optional and
+# only raises the request quota.
 REDDIT_CLIENT_ID: str | None = os.environ.get("REDDIT_CLIENT_ID")
 REDDIT_CLIENT_SECRET: str | None = os.environ.get("REDDIT_CLIENT_SECRET")
 ADZUNA_APP_ID: str | None = os.environ.get("ADZUNA_APP_ID")
 ADZUNA_APP_KEY: str | None = os.environ.get("ADZUNA_APP_KEY")
+STACKEXCHANGE_KEY: str | None = os.environ.get("STACKEXCHANGE_KEY")
 
-# Terms fed to every text-search collector. Keep them lowercase; matching is
-# case-insensitive.
+
+def _env_flag(name: str) -> bool:
+    return os.environ.get(name, "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+# Collectors run by default. Reddit is intentionally absent: its Data API now
+# requires prior approval, so it is gated behind reddit_enabled().
+ENABLED_COLLECTORS: list[str] = ["hackernews", "stackexchange", "jobs"]
+
+
+def reddit_enabled() -> bool:
+    """Reddit runs only when named in ENABLED_COLLECTORS or the env flag is set."""
+    return "reddit" in ENABLED_COLLECTORS or _env_flag("SNOWWATCH_ENABLE_REDDIT")
+
+
+# --- Per-collector query terms ---------------------------------------------
+# Kept per collector because search backends differ: Hacker News and Reddit take
+# phrase-style queries, Stack Exchange takes shorter term-style queries.
+
+# Hacker News (and Reddit when enabled). Lowercase; matching is case-insensitive.
 QUERY_TERMS: list[str] = [
     "snowflake costs",
     "snowflake bill",
@@ -29,6 +49,16 @@ QUERY_TERMS: list[str] = [
     "snowflake credits",
 ]
 
+# Stack Exchange advanced-search terms.
+STACKEXCHANGE_QUERY_TERMS: list[str] = [
+    "snowflake cost",
+    "snowflake pricing",
+    "snowflake slow",
+    "snowflake performance",
+    "migrate from snowflake",
+    "snowflake alternative",
+]
+
 # Terms used specifically for job-posting collectors.
 JOB_QUERY_TERMS: list[str] = [
     "snowflake migration",
@@ -36,10 +66,18 @@ JOB_QUERY_TERMS: list[str] = [
     "cost optimization snowflake",
 ]
 
-# Subreddits searched via the public JSON endpoints.
+# --- Stack Exchange source settings ----------------------------------------
+STACKEXCHANGE_SITES: list[str] = ["stackoverflow", "dba.stackexchange.com"]
+# Built-in filter that includes question bodies so the scorer sees real text.
+STACKEXCHANGE_FILTER: str = "withbody"
+STACKEXCHANGE_PAGESIZE: int = 25
+# Stop collecting once the remaining daily quota reaches this floor.
+STACKEXCHANGE_QUOTA_FLOOR: int = 5
+
+# Subreddits searched by the reddit collector when it is enabled.
 SUBREDDITS: list[str] = ["dataengineering", "snowflake", "databricks"]
 
-# Sent on every outbound request. Reddit blocks generic/empty agents.
+# Sent on every outbound request. Reddit and Stack Exchange reject empty agents.
 USER_AGENT: str = "snowwatch/0.1 (competitive signal monitor; contact ops@example.com)"
 
 # Seconds to sleep between successive HTTP calls to the same host.
@@ -226,6 +264,46 @@ COMPANY_DENYLIST: frozenset[str] = frozenset(
         "Java",
         "Scala",
         "Rust",
+        "Elasticsearch",
+        "DataGrip",
+        "MongoDB",
+        "Netezza",
+        "Hive",
+        "HBase",
+        "Cassandra",
+        "Vertica",
+        "Synapse",
+        "Microstrategy",
+        "Segment",
+        # SQL keywords: appear title-cased in prose and all-caps in code blocks,
+        # never a prospect company name.
+        "Select",
+        "From",
+        "Where",
+        "Join",
+        "Group",
+        "Order",
+        "Insert",
+        "Update",
+        "Delete",
+        "Create",
+        "Alter",
+        "Table",
+        "Values",
+        "Null",
+        "Case",
+        "When",
+        "Then",
+        "Count",
+        "Copy",
+        "Into",
+        "Merge",
+        "Describe",
+        "Union",
+        "Having",
+        "Limit",
+        "Warehouse",
+        "Query",
     }
 )
 
@@ -246,6 +324,51 @@ COMPANY_STOPWORDS: frozenset[str] = frozenset(
         "It",
         "They",
         "You",
+        "In",
+        "Is",
+        "As",
+        "At",
+        "By",
+        "Of",
+        "On",
+        "Or",
+        "To",
+        "If",
+        "So",
+        "Be",
+        "Do",
+        "No",
+        "Are",
+        "Was",
+        "Has",
+        "Had",
+        "Can",
+        "How",
+        "Why",
+        "Who",
+        "Not",
+        "But",
+        "And",
+        "For",
+        "Its",
+        "Use",
+        "Get",
+        "See",
+        "When",
+        "What",
+        "Where",
+        "Which",
+        "While",
+        "There",
+        "These",
+        "Then",
+        "With",
+        "Will",
+        "Would",
+        "Should",
+        "Could",
+        "Here",
+        "Have",
         "SQL",
         "ETL",
         "Data",

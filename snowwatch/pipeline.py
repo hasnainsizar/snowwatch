@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import logging
 
-from . import db
+from . import config, db
 from .classifier import classify
-from .collectors import ALL_COLLECTORS
+from .collectors import enabled_collectors
 from .collectors.base import CollectorError, make_client
 from .models import Signal
 from .scoring import score_signal
@@ -23,11 +23,13 @@ def enrich(signals: list[Signal]) -> list[Signal]:
 
 
 def collect_all() -> list[Signal]:
-    """Run all collectors. A failing source is logged and skipped."""
+    """Run the enabled collectors. A failing source is logged and skipped."""
+    if not config.reddit_enabled():
+        logger.info("reddit: disabled (requires approved Reddit Data API access)")
+
     collected: list[Signal] = []
     with make_client() as client:
-        for collector_cls in ALL_COLLECTORS:
-            collector = collector_cls()
+        for collector in enabled_collectors():
             try:
                 found = collector.collect(client)
                 logger.info("%s: %d signals", collector.name, len(found))
