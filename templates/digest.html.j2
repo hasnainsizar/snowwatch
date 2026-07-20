@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Snowwatch Digest — {{ d.generated_at.strftime("%Y-%m-%d") }}</title>
+<style>
+  :root {
+    --bg: #0f172a; --panel: #1e293b; --panel2: #263449; --ink: #e2e8f0;
+    --muted: #94a3b8; --accent: #38bdf8; --hot: #f97316; --line: #334155;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+    font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  .wrap { max-width: 900px; margin: 0 auto; padding: 32px 20px 80px; }
+  header { border-bottom: 2px solid var(--line); padding-bottom: 16px; margin-bottom: 24px; }
+  h1 { margin: 0 0 4px; font-size: 26px; letter-spacing: -0.02em; }
+  .meta { color: var(--muted); font-size: 13px; }
+  h2 { font-size: 18px; margin: 36px 0 12px; color: var(--accent);
+    border-left: 3px solid var(--accent); padding-left: 10px; }
+  h3 { font-size: 15px; margin: 20px 0 8px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip { background: var(--panel); border: 1px solid var(--line); border-radius: 999px;
+    padding: 4px 12px; font-size: 13px; color: var(--muted); }
+  .chip b { color: var(--ink); }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+    padding: 14px 16px; margin: 10px 0; }
+  .card .head { display: flex; align-items: baseline; gap: 10px; }
+  .score { font-weight: 700; font-size: 13px; min-width: 38px; text-align: center;
+    border-radius: 6px; padding: 3px 6px; background: var(--panel2); }
+  .score.hot { background: var(--hot); color: #1a1005; }
+  .cat { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .sub { color: var(--muted); font-size: 12px; margin: 4px 0 0; }
+  .excerpt { color: var(--ink); font-size: 13px; margin: 8px 0 0; padding-left: 12px;
+    border-left: 2px solid var(--line); }
+  ul.plain { list-style: none; padding: 0; margin: 0; }
+  ul.plain li { padding: 6px 0; border-bottom: 1px solid var(--line); }
+  ul.plain li:last-child { border-bottom: none; }
+  .angle { background: var(--panel2); border-radius: 10px; padding: 14px 16px; margin: 10px 0;
+    border-left: 3px solid var(--hot); }
+  .empty { color: var(--muted); font-style: italic; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Snowwatch Weekly Digest</h1>
+    <div class="meta">Generated {{ d.generated_at.strftime("%Y-%m-%d %H:%M UTC") }}
+      · trailing {{ d.window_days }} days · {{ d.total_signals }} signals</div>
+  </header>
+
+  <div class="chips">
+    {% for source, n in d.source_counts %}
+    <span class="chip"><b>{{ n }}</b> {{ source }}</span>
+    {% endfor %}
+  </div>
+
+  <h2>Top signals by score</h2>
+  {% if d.top_signals %}
+    {% for s in d.top_signals %}
+    <div class="card">
+      <div class="head">
+        <span class="score {% if s.score >= 55 %}hot{% endif %}">{{ s.score }}</span>
+        <div>
+          <span class="cat">{{ s.category }}</span><br>
+          <a href="{{ s.url }}">{{ s.title }}</a>
+        </div>
+      </div>
+      <p class="sub">
+        {% if s.company %}{{ s.company }} · {% endif %}{{ s.source }} · {{ s.posted_at.strftime("%Y-%m-%d") }}
+        {% if s.matched_terms %} · {{ s.matched_terms | join(", ") }}{% endif %}
+      </p>
+      <p class="excerpt">{{ s.text_excerpt }}</p>
+    </div>
+    {% endfor %}
+  {% else %}
+    <p class="empty">No signals in this window.</p>
+  {% endif %}
+
+  <h2>Signals by category</h2>
+  {% for category, rows in d.by_category.items() %}
+    <h3>{{ category }} <span class="cat">({{ rows | length }})</span></h3>
+    <ul class="plain">
+      {% for s in rows %}
+      <li><span class="score">{{ s.score }}</span>
+        <a href="{{ s.url }}">{{ s.title }}</a>{% if s.company %} — {{ s.company }}{% endif %}</li>
+      {% endfor %}
+    </ul>
+  {% endfor %}
+
+  <h2>New companies detected this week</h2>
+  {% if d.new_companies %}
+    <div class="chips">
+      {% for company in d.new_companies %}
+      <span class="chip"><b>{{ company }}</b></span>
+      {% endfor %}
+    </div>
+  {% else %}
+    <p class="empty">None.</p>
+  {% endif %}
+
+  <h2>Suggested outreach angles</h2>
+  {% if d.outreach %}
+    {% for s, angle in d.outreach %}
+    <div class="angle">
+      <h3>{{ s.company or s.author }} — score {{ s.score }} <span class="cat">({{ s.category }})</span></h3>
+      <p class="sub"><a href="{{ s.url }}">{{ s.title }}</a></p>
+      <p>{{ angle }}</p>
+    </div>
+    {% endfor %}
+  {% else %}
+    <p class="empty">No high-score signals crossed the outreach threshold this window.</p>
+  {% endif %}
+</div>
+</body>
+</html>

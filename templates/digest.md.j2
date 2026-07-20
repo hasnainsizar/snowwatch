@@ -1,0 +1,57 @@
+# Snowwatch Weekly Digest
+
+Generated {{ d.generated_at.strftime("%Y-%m-%d %H:%M UTC") }} · trailing {{ d.window_days }} days · {{ d.total_signals }} signals
+
+## Sources this window
+
+{% for source, n in d.source_counts %}
+- **{{ source }}**: {{ n }}
+{% endfor %}
+
+## Top signals by score
+
+{% if d.top_signals %}
+{% for s in d.top_signals %}
+{{ loop.index }}. **[{{ s.score }}]** {{ s.category }} — [{{ s.title }}]({{ s.url }})
+   {% if s.company %}Company: {{ s.company }} · {% endif %}Source: {{ s.source }} · {{ s.posted_at.strftime("%Y-%m-%d") }}
+   > {{ s.text_excerpt }}
+{% endfor %}
+{% else %}
+_No signals in this window._
+{% endif %}
+
+## Signals by category
+
+{% for category, rows in d.by_category.items() %}
+### {{ category }} ({{ rows | length }})
+
+{% for s in rows %}
+- **[{{ s.score }}]** [{{ s.title }}]({{ s.url }}){% if s.company %} — {{ s.company }}{% endif %}
+{% endfor %}
+
+{% endfor %}
+
+## New companies detected this week
+
+{% if d.new_companies %}
+{% for company in d.new_companies %}
+- {{ company }}
+{% endfor %}
+{% else %}
+_None._
+{% endif %}
+
+## Suggested outreach angles
+
+{% if d.outreach %}
+{% for s, angle in d.outreach %}
+### {{ s.company or s.author }} — score {{ s.score }} ({{ s.category }})
+
+[{{ s.title }}]({{ s.url }})
+
+{{ angle }}
+
+{% endfor %}
+{% else %}
+_No high-score signals crossed the outreach threshold this window._
+{% endif %}
