@@ -37,6 +37,8 @@
   a:hover { text-decoration: underline; }
   .sub { color: var(--muted); font-size: 12px; margin: 4px 0 0; }
   .stub { color: var(--hot); font-weight: 700; font-size: 11px; letter-spacing: 0.03em; }
+  .suppressed { color: var(--muted); font-size: 12px; margin-top: 28px;
+    border-top: 1px solid var(--line); padding-top: 12px; }
   .excerpt { color: var(--ink); font-size: 13px; margin: 8px 0 0; padding-left: 12px;
     border-left: 2px solid var(--line); }
   ul.plain { list-style: none; padding: 0; margin: 0; }
@@ -122,6 +124,10 @@
     {% endfor %}
   {% else %}
     <p class="empty">None detected this period.</p>
+  {% endif %}
+
+  {% if d.suppressed_low_score %}
+  <p class="suppressed">{{ d.suppressed_low_score }} low-score signals suppressed — see stats.</p>
   {% endif %}
 </div>
 </body>

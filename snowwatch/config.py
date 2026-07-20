@@ -81,6 +81,11 @@ JOB_QUERY_TERMS: list[str] = [
 # per run via --days.
 DIGEST_WINDOW_DAYS: int = 14
 
+# Minimum score for a signal to appear in the digest's category lists. Lower-score
+# signals stay in the database and in `stats`, but are suppressed from the digest
+# and counted in a one-line footer.
+DIGEST_MIN_SCORE: int = 15
+
 # --- Stack Exchange source settings ----------------------------------------
 STACKEXCHANGE_SITES: list[str] = ["stackoverflow", "dba.stackexchange.com"]
 # Built-in filter that includes question bodies so the scorer sees real text.

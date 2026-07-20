@@ -9,7 +9,7 @@ from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
-from . import classifier, db
+from . import classifier, config, db
 from .models import Signal
 from .scoring import normalize_company
 
@@ -60,6 +60,7 @@ class DigestData:
     new_companies: list[str]
     outreach: list[tuple[Signal, str]]
     source_counts: list[tuple[str, int]]
+    suppressed_low_score: int
 
     @property
     def trend_delta(self) -> int:
@@ -83,17 +84,20 @@ def build_digest_data(conn, window_days: int, include_stubs: bool = False) -> Di
     """
     signals = db.signals_since(conn, window_days, include_stubs=include_stubs)
 
+    visible = [s for s in signals if s.score >= config.DIGEST_MIN_SCORE]
+    suppressed_low_score = len(signals) - len(visible)
+
     by_category: dict[str, list[Signal]] = {c: [] for c in classifier.CATEGORIES}
-    for sig in signals:
+    for sig in visible:
         by_category.setdefault(sig.category or classifier.OTHER, []).append(sig)
     by_category = {c: rows for c, rows in by_category.items() if rows}
 
-    displacement = [s for s in signals if s.category in classifier.DISPLACEMENT_CATEGORIES]
+    displacement = [s for s in visible if s.category in classifier.DISPLACEMENT_CATEGORIES]
 
     known = {normalize_company(c) for c in db.known_companies_before(conn, window_days)}
     new_companies: list[str] = []
     seen_normalized: set[str] = set()
-    for sig in signals:
+    for sig in visible:
         # A company counts only when the signal has its own displacement context,
         # not when it is merely named in a vendor/pricing headline.
         if not sig.company or sig.category not in classifier.COMPANY_DETECTION_CATEGORIES:
@@ -122,6 +126,7 @@ def build_digest_data(conn, window_days: int, include_stubs: bool = False) -> Di
         new_companies=new_companies,
         outreach=outreach,
         source_counts=source_counts,
+        suppressed_low_score=suppressed_low_score,
     )
 
 
