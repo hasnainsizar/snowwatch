@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import Counter
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -109,6 +110,8 @@ def build_digest_data(conn, window_days: int, include_stubs: bool = False) -> Di
         if sig.score >= HIGH_SCORE_THRESHOLD
     ]
 
+    source_counts = sorted(Counter(s.source for s in signals).items(), key=lambda kv: (-kv[1], kv[0]))
+
     return DigestData(
         generated_at=datetime.now(timezone.utc),
         window_days=window_days,
@@ -118,7 +121,7 @@ def build_digest_data(conn, window_days: int, include_stubs: bool = False) -> Di
         by_category=by_category,
         new_companies=new_companies,
         outreach=outreach,
-        source_counts=db.counts_by(conn, "source"),
+        source_counts=source_counts,
     )
 
 
