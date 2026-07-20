@@ -36,6 +36,7 @@
   a { color: var(--accent); text-decoration: none; }
   a:hover { text-decoration: underline; }
   .sub { color: var(--muted); font-size: 12px; margin: 4px 0 0; }
+  .stub { color: var(--hot); font-weight: 700; font-size: 11px; letter-spacing: 0.03em; }
   .excerpt { color: var(--ink); font-size: 13px; margin: 8px 0 0; padding-left: 12px;
     border-left: 2px solid var(--line); }
   ul.plain { list-style: none; padding: 0; margin: 0; }
@@ -69,7 +70,7 @@
       <div class="head">
         <span class="score {% if s.score >= 55 %}hot{% endif %}">{{ s.score }}</span>
         <div>
-          <span class="cat">{{ s.category }}</span><br>
+          <span class="cat">{% if s.is_stub %}<span class="stub">[STUB]</span> {% endif %}{{ s.category }}</span><br>
           <a href="{{ s.url }}">{{ s.title }}</a>
         </div>
       </div>
@@ -91,7 +92,7 @@
     <ul class="plain">
       {% for s in rows %}
       <li><span class="score">{{ s.score }}</span>
-        <a href="{{ s.url }}">{{ s.title }}</a>{% if s.company %} — {{ s.company }}{% endif %}</li>
+        {% if s.is_stub %}<span class="stub">[STUB]</span> {% endif %}<a href="{{ s.url }}">{{ s.title }}</a>{% if s.company %} — {{ s.company }}{% endif %}</li>
       {% endfor %}
     </ul>
     {% endfor %}

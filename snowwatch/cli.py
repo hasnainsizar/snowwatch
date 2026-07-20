@@ -32,10 +32,13 @@ def digest_cmd(
     db_path: str = _db_option(),
     days: int = typer.Option(config.DIGEST_WINDOW_DAYS, "--days", help="Trailing window in days."),
     out_dir: str = typer.Option("digests", "--out", help="Output directory."),
+    include_stubs: bool = typer.Option(
+        False, "--include-stubs", help="Include stub job signals, tagged [STUB]."
+    ),
 ) -> None:
     """Generate the digest (markdown + HTML) for the trailing window."""
     with db.connect(db_path) as conn:
-        md_path, html_path = digest.write_digest(conn, days, out_dir)
+        md_path, html_path = digest.write_digest(conn, days, out_dir, include_stubs=include_stubs)
     typer.echo(f"Digest written:\n  {md_path}\n  {html_path}")
 
 
@@ -66,12 +69,15 @@ def run(
     db_path: str = _db_option(),
     days: int = typer.Option(config.DIGEST_WINDOW_DAYS, "--days", help="Trailing window."),
     out_dir: str = typer.Option("digests", "--out", help="Output directory."),
+    include_stubs: bool = typer.Option(
+        False, "--include-stubs", help="Include stub job signals, tagged [STUB]."
+    ),
 ) -> None:
     """Collect and then generate a digest in one shot."""
     found, inserted = pipeline.run_collection(db_path)
     typer.echo(f"Collected {found} signals, {inserted} new.")
     with db.connect(db_path) as conn:
-        md_path, html_path = digest.write_digest(conn, days, out_dir)
+        md_path, html_path = digest.write_digest(conn, days, out_dir, include_stubs=include_stubs)
     typer.echo(f"Digest written:\n  {md_path}\n  {html_path}")
 
 

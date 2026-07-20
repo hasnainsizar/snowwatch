@@ -75,9 +75,12 @@ def _outreach_angle(signal: Signal) -> str:
     return OUTREACH_ANGLES.get(signal.category or classifier.OTHER, OUTREACH_ANGLES[classifier.OTHER])
 
 
-def build_digest_data(conn, window_days: int) -> DigestData:
-    """Assemble digest sections from the trailing window of signals."""
-    signals = db.signals_since(conn, window_days)
+def build_digest_data(conn, window_days: int, include_stubs: bool = False) -> DigestData:
+    """Assemble digest sections from the trailing window of signals.
+
+    Stub job signals are excluded from every section unless include_stubs is set.
+    """
+    signals = db.signals_since(conn, window_days, include_stubs=include_stubs)
 
     by_category: dict[str, list[Signal]] = {c: [] for c in classifier.CATEGORIES}
     for sig in signals:
@@ -90,7 +93,9 @@ def build_digest_data(conn, window_days: int) -> DigestData:
     new_companies: list[str] = []
     seen_normalized: set[str] = set()
     for sig in signals:
-        if not sig.company:
+        # A company counts only when the signal has its own displacement context,
+        # not when it is merely named in a vendor/pricing headline.
+        if not sig.company or sig.category not in classifier.COMPANY_DETECTION_CATEGORIES:
             continue
         norm = normalize_company(sig.company)
         if norm in known or norm in seen_normalized:
@@ -108,7 +113,7 @@ def build_digest_data(conn, window_days: int) -> DigestData:
         generated_at=datetime.now(timezone.utc),
         window_days=window_days,
         total_signals=len(signals),
-        prior_signals=db.count_posted_between(conn, window_days * 2, window_days),
+        prior_signals=db.count_posted_between(conn, window_days * 2, window_days, include_stubs=include_stubs),
         top_signals=displacement[:15],
         by_category=by_category,
         new_companies=new_companies,
@@ -135,9 +140,9 @@ def render_html(data: DigestData) -> str:
     return _environment(trim=True).get_template("digest.html.j2").render(d=data)
 
 
-def write_digest(conn, window_days: int, out_dir: str) -> tuple[Path, Path]:
+def write_digest(conn, window_days: int, out_dir: str, include_stubs: bool = False) -> tuple[Path, Path]:
     """Render both formats to ``out_dir`` and return (markdown_path, html_path)."""
-    data = build_digest_data(conn, window_days)
+    data = build_digest_data(conn, window_days, include_stubs=include_stubs)
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
     stamp = data.generated_at.strftime("%Y%m%d")

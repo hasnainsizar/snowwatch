@@ -32,6 +32,13 @@ DISPLACEMENT_CATEGORIES: frozenset[str] = frozenset(
     {MIGRATION_INTENT, COST_PAIN, PERFORMANCE_COMPLAINT, VENDOR_COMPARISON}
 )
 
+# Categories whose signals carry enough of their own displacement context for an
+# extracted company to count as a detected account. VENDOR_COMPARISON is excluded
+# because it often fires on a vendor name in the headline with no real signal.
+COMPANY_DETECTION_CATEGORIES: frozenset[str] = frozenset(
+    {MIGRATION_INTENT, COST_PAIN, PERFORMANCE_COMPLAINT}
+)
+
 # Resolution order: strongest buy-signal first.
 _PRIORITY: list[tuple[str, str]] = [
     ("migration_intent", MIGRATION_INTENT),
