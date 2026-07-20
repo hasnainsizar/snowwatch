@@ -36,6 +36,20 @@ def test_stopword_head_rejected():
     assert extract_company("We at Snowflake are fine") is None
 
 
+def test_common_capitalized_words_rejected():
+    assert extract_company("Is this slow? Is it the warehouse? Is it cost?") is None
+    assert extract_company("In one case, In another case, In prod it broke") is None
+
+
+def test_allcaps_keywords_rejected_in_bare_tier():
+    assert extract_company("SELECT AS AND CASE WHEN; SELECT AS AND CASE WHEN") is None
+    assert extract_company("The BLOB column had a BLOB and another BLOB value") is None
+
+
+def test_context_still_accepts_acronym_company():
+    assert extract_company("We at IBM ran the numbers. We at IBM again.") == "IBM"
+
+
 def test_normalize_strips_suffix():
     assert normalize_company("Brightloom Inc") == "Brightloom"
     assert normalize_company("Northwind, LLC") == "Northwind"
