@@ -49,6 +49,14 @@ QUERY_TERMS: list[str] = [
     "snowflake credits",
 ]
 
+# Recurring aggregate HN threads that match query terms incidentally but carry no
+# per-company signal. Skipped at collection. Lowercase, substring match on title.
+HN_TITLE_EXCLUSIONS: list[str] = [
+    "ask hn: who wants to be hired",
+    "ask hn: who is hiring",
+    "ask hn: freelancer? seeking freelancer",
+]
+
 # Stack Exchange advanced-search terms. The bare "snowflake" term collects every
 # recent Snowflake question; relevance is left to the scorer. The narrow phrases
 # stay so matched_terms records the specific angle when one hits.
@@ -318,6 +326,13 @@ COMPANY_DENYLIST: frozenset[str] = frozenset(
         "Synapse",
         "Microstrategy",
         "Segment",
+        "PySpark",
+        "Delta Lake",
+        "Unity Catalog",
+        "MLflow",
+        "Bedrock",
+        "Terraform",
+        "Kubernetes",
         # SQL keywords: appear title-cased in prose and all-caps in code blocks,
         # never a prospect company name.
         "Select",
