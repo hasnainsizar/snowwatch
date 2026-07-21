@@ -9,3 +9,5 @@ digests/
 .DS_Store
 .claude/
 .env
+.env.*
+!.env.example
