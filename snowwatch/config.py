@@ -262,6 +262,86 @@ DATA_CONTEXT_TERMS: list[str] = [
     "join",
 ]
 
+# Evaluative language that marks a real vendor evaluation (not a skills list).
+# Applies to all sources; for job postings it is required before a competitor
+# mention counts as VENDOR_COMPARISON. Lowercase, substring match; stems like
+# "evaluat" cover their variants.
+VENDOR_EVALUATIVE_PHRASES: list[str] = [
+    "evaluat",
+    "compar",
+    " vs ",
+    "vs.",
+    "versus",
+    "vs snowflake",
+    "snowflake vs",
+    "alternative to",
+    "alternatives to",
+    "considering",
+    "proof of concept",
+    "proof-of-concept",
+    " poc ",
+    "bake-off",
+    "bakeoff",
+    "migrate from",
+    "migrating from",
+    "replace",
+    "replacing",
+    "replacement for",
+    "benchmark",
+    "shortlist",
+    "trade-off",
+]
+
+# Requirements/skills framing. When a job posting matches one of these and lacks
+# evaluative language, competitor-tech mentions are treated as a skills list, not
+# a vendor comparison. Regex, matched case-insensitively against signal content.
+SKILLS_CONTEXT_PATTERNS: list[str] = [
+    r"experience (?:with|in|using|of)\b",
+    r"expertise (?:with|in|of)\b",
+    r"proficien(?:t|cy) (?:with|in)\b",
+    r"hands[- ]on\b",
+    r"knowledge of\b",
+    r"familiar(?:ity)? with\b",
+    r"required skills\b",
+    r"must have\b",
+    r"nice to have\b",
+    r"\b\d+\+?\s*(?:years|yrs)\b",
+    r"(?:databricks|redshift|bigquery|clickhouse|duckdb|spark|snowflake)\s*[-–—]\s*\d+",
+    r"(?:databricks|redshift|bigquery|clickhouse|duckdb|spark|snowflake)\s*,\s*"
+    r"(?:databricks|redshift|bigquery|clickhouse|duckdb|spark|snowflake|python|scala|java)",
+]
+
+# Staffing/consulting indicators. Signals whose company name contains one of
+# these substrings, or matches a known firm, are annotated (not filtered) so the
+# digest can note "via staffing". Matched case-insensitively on the company name.
+STAFFING_INDICATORS: list[str] = [
+    "technologies",
+    "systems llc",
+    "infotech",
+    "staffing",
+    "consulting",
+    "consultancy",
+    "recruiting",
+    "recruitment",
+    "talent",
+    "solutions inc",
+]
+
+STAFFING_KNOWN_FIRMS: list[str] = [
+    "cognizant",
+    "infosys",
+    "tcs",
+    "wipro",
+    "accenture",
+    "capgemini",
+    "robert half",
+    "teksystems",
+    "insight global",
+    "randstad",
+    "kforce",
+    "apex systems",
+]
+
 # Technology, vendor, and cloud terms that are frequently capitalized in this
 # domain but are never a prospect company name. Matched case-insensitively.
 COMPANY_DENYLIST: frozenset[str] = frozenset(
