@@ -50,7 +50,7 @@ _PRIORITY: list[tuple[str, str]] = [
 
 def classify(signal: Signal) -> str:
     """Return the single best category for a signal and store it on the signal."""
-    analysis = analyze(signal.content)
+    analysis = analyze(signal.content, signal.source)
     if analysis.inbound:
         category = MIGRATION_INBOUND
     else:

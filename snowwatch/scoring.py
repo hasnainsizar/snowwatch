@@ -37,6 +37,30 @@ _POSITIVE_SUPPRESSED = ("cost_pain", "performance_complaint", "general_negativit
 # on their own, independent of the data-context vocabulary check.
 _TOPIC_BUCKETS = frozenset({"migration_intent", "cost_pain", "performance_complaint"})
 
+_SKILLS_CONTEXT_RE = [re.compile(p, re.IGNORECASE) for p in config.SKILLS_CONTEXT_PATTERNS]
+
+
+def _is_job_source(source: str | None) -> bool:
+    return bool(source) and source.startswith("jobs")
+
+
+def _has_vendor_evaluation(content: str) -> bool:
+    return any(p in content for p in config.VENDOR_EVALUATIVE_PHRASES)
+
+
+def _is_skills_list(content: str) -> bool:
+    return any(pattern.search(content) for pattern in _SKILLS_CONTEXT_RE)
+
+
+def is_staffing_company(company: str | None) -> bool:
+    """True when the company name reads as a staffing/consulting firm."""
+    if not company:
+        return False
+    lowered = company.casefold()
+    if any(indicator in lowered for indicator in config.STAFFING_INDICATORS):
+        return True
+    return any(firm in lowered for firm in config.STAFFING_KNOWN_FIRMS)
+
 
 @dataclass(slots=True)
 class Analysis:
@@ -62,14 +86,15 @@ def matched_phrases(content: str) -> dict[str, list[str]]:
     return hits
 
 
-def analyze(content: str) -> Analysis:
+def analyze(content: str, source: str | None = None) -> Analysis:
     """Resolve effective phrase buckets after direction, sentiment, and topic guards.
 
     Inbound (moving TO Snowflake) without an explicit outbound phrase drops the
     migration bucket; positive sentiment drops the pain buckets. A signal with no
     topic-establishing bucket and no data-warehouse vocabulary is off-topic (e.g.
     snow/weather or the CDP product): its buckets and inbound flag are cleared so
-    it scores to OTHER.
+    it scores to OTHER. For job postings, a competitor mention in a skills list
+    without evaluative language does not count as a vendor comparison.
     """
     raw = matched_phrases(content)
     outbound = "migration_intent" in raw
@@ -82,6 +107,13 @@ def analyze(content: str) -> Analysis:
     if positive:
         for bucket in _POSITIVE_SUPPRESSED:
             buckets.pop(bucket, None)
+    if (
+        "vendor_comparison" in buckets
+        and _is_job_source(source)
+        and not _has_vendor_evaluation(content)
+        and _is_skills_list(content)
+    ):
+        buckets.pop("vendor_comparison", None)
 
     on_topic = inbound or bool(_TOPIC_BUCKETS & buckets.keys()) or _has_data_context(content)
     off_topic = not on_topic
@@ -163,7 +195,7 @@ def score_signal(signal: Signal) -> int:
     Also fills ``matched_terms`` (from effective buckets) and ``company`` when
     they are not already populated by the collector.
     """
-    analysis = analyze(signal.content)
+    analysis = analyze(signal.content, signal.source)
     buckets = analysis.buckets
 
     if not signal.matched_terms:
@@ -187,8 +219,12 @@ def score_signal(signal: Signal) -> int:
     if signal.company is None:
         # Extract from signal text only; the author field is never a company source.
         signal.company = extract_company(f"{signal.title}\n{signal.text_excerpt}")
-    if signal.company:
+    # Reward a detected company only alongside real displacement context, so a
+    # skills-list posting cannot clear the digest floor on the company bonus.
+    if signal.company and buckets:
         total += config.WEIGHTS["company_detected"]
+
+    signal.staffing_flag = is_staffing_company(signal.company)
 
     total += _recency_bonus(signal.posted_at)
 

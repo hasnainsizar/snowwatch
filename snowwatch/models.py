@@ -26,6 +26,7 @@ class Signal:
     category: str | None = None
     score: int = 0
     engagement: int = 0
+    staffing_flag: bool = False
 
     @property
     def url_hash(self) -> str:
