@@ -2,18 +2,17 @@
 
 from __future__ import annotations
 
-import logging
-
 import typer
 
 from . import config, db, digest, pipeline
+from .logutil import configure_logging
 
 app = typer.Typer(
     add_completion=False,
     help="Competitive displacement signal monitor for Snowflake.",
 )
 
-logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
+configure_logging()
 
 
 def _db_option() -> str:
