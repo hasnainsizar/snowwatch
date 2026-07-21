@@ -28,6 +28,7 @@ CREATE TABLE IF NOT EXISTS signals (
     category      TEXT,
     score         INTEGER NOT NULL DEFAULT 0,
     engagement    INTEGER NOT NULL DEFAULT 0,
+    staffing_flag INTEGER NOT NULL DEFAULT 0,
     collected_at  TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_signals_posted_at ON signals(posted_at);
@@ -50,7 +51,10 @@ def connect(db_path: str) -> Iterator[sqlite3.Connection]:
 
 
 def _migrate(conn: sqlite3.Connection) -> None:
-    """Retag legacy stub job rows (jobs.example.com URLs) to the stub source."""
+    """Apply idempotent schema/data migrations to a pre-existing database."""
+    columns = {row["name"] for row in conn.execute("PRAGMA table_info(signals)")}
+    if "staffing_flag" not in columns:
+        conn.execute("ALTER TABLE signals ADD COLUMN staffing_flag INTEGER NOT NULL DEFAULT 0")
     conn.execute(
         "UPDATE signals SET source = ? WHERE source = 'jobs' AND url LIKE '%jobs.example.com%'",
         (STUB_SOURCE,),
@@ -76,6 +80,7 @@ def _row_to_signal(row: sqlite3.Row) -> Signal:
         category=row["category"],
         score=row["score"],
         engagement=row["engagement"],
+        staffing_flag=bool(row["staffing_flag"]),
     )
 
 
@@ -88,8 +93,9 @@ def insert_signals(conn: sqlite3.Connection, signals: Iterable[Signal]) -> int:
             """
             INSERT OR IGNORE INTO signals (
                 url_hash, source, url, title, text_excerpt, author, posted_at,
-                matched_terms, company, category, score, engagement, collected_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                matched_terms, company, category, score, engagement, staffing_flag,
+                collected_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 sig.url_hash,
@@ -104,6 +110,7 @@ def insert_signals(conn: sqlite3.Connection, signals: Iterable[Signal]) -> int:
                 sig.category,
                 sig.score,
                 sig.engagement,
+                int(sig.staffing_flag),
                 now,
             ),
         )
