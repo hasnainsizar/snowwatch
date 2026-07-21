@@ -79,7 +79,7 @@ class StackExchangeCollector:
         }
         if self._key:
             params["key"] = self._key
-        resp = polite_get(client, _API, params=params)
+        resp = polite_get(client, _API, label="stackexchange", params=params)
         try:
             return resp.json()
         except ValueError as exc:

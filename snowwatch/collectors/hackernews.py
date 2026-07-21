@@ -32,6 +32,7 @@ class HackerNewsCollector:
                 resp = polite_get(
                     client,
                     _API,
+                    label="hackernews",
                     params={
                         "query": term,
                         "tags": "(comment,story)",

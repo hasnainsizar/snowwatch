@@ -87,6 +87,7 @@ class AdzunaJobSource:
             resp = polite_get(
                 client,
                 self._API,
+                label="jobs",
                 params={
                     "app_id": self._app_id,
                     "app_key": self._app_key,

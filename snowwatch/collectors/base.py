@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import re
 import time
 from html import unescape
@@ -10,7 +11,10 @@ from typing import Protocol, runtime_checkable
 import httpx
 
 from .. import config
+from ..logutil import redact, request_line
 from ..models import Signal
+
+logger = logging.getLogger("snowwatch")
 
 _TAG_RE = re.compile(r"<[^>]+>")
 
@@ -39,15 +43,19 @@ def make_client() -> httpx.Client:
     )
 
 
-def polite_get(client: httpx.Client, url: str, **kwargs) -> httpx.Response:
-    """GET with a courtesy delay and unified error translation."""
+def polite_get(client: httpx.Client, url: str, *, label: str = "http", **kwargs) -> httpx.Response:
+    """GET with a courtesy delay and unified error translation.
+
+    Logs one redacted request line per call; credentials never reach the log.
+    """
     time.sleep(config.REQUEST_DELAY_SECONDS)
+    logger.info("%s: GET %s", label, request_line(url, kwargs.get("params")))
     try:
         resp = client.get(url, **kwargs)
         resp.raise_for_status()
         return resp
     except httpx.HTTPError as exc:
-        raise CollectorError(f"GET {url} failed: {exc}") from exc
+        raise CollectorError(f"GET {redact(url)} failed: {redact(str(exc))}") from exc
 
 
 def strip_html(text: str) -> str:
