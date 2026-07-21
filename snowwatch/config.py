@@ -19,6 +19,22 @@ ADZUNA_APP_ID: str | None = os.environ.get("ADZUNA_APP_ID")
 ADZUNA_APP_KEY: str | None = os.environ.get("ADZUNA_APP_KEY")
 STACKEXCHANGE_KEY: str | None = os.environ.get("STACKEXCHANGE_KEY")
 
+# Query-parameter names whose values are secrets and must be masked in any log
+# output (request lines, error messages). Matched case-insensitively.
+REDACT_QUERY_PARAMS: frozenset[str] = frozenset(
+    {
+        "app_id",
+        "app_key",
+        "key",
+        "api_key",
+        "secret",
+        "client_secret",
+        "token",
+        "access_token",
+        "password",
+    }
+)
+
 
 def _env_flag(name: str) -> bool:
     return os.environ.get(name, "").strip().lower() in {"1", "true", "yes", "on"}
