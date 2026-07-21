@@ -37,6 +37,8 @@
   a:hover { text-decoration: underline; }
   .sub { color: var(--muted); font-size: 12px; margin: 4px 0 0; }
   .stub { color: var(--hot); font-weight: 700; font-size: 11px; letter-spacing: 0.03em; }
+  .staffing { color: var(--muted); font-size: 11px; font-style: italic;
+    border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; }
   .suppressed { color: var(--muted); font-size: 12px; margin-top: 28px;
     border-top: 1px solid var(--line); padding-top: 12px; }
   .excerpt { color: var(--ink); font-size: 13px; margin: 8px 0 0; padding-left: 12px;
@@ -78,6 +80,7 @@
       </div>
       <p class="sub">
         {% if s.company %}{{ s.company }} · {% endif %}{{ s.source }} · {{ s.posted_at.strftime("%Y-%m-%d") }}
+        {% if s.staffing_flag %} · <span class="staffing">via staffing</span>{% endif %}
         {% if s.matched_terms %} · {{ s.matched_terms | join(", ") }}{% endif %}
       </p>
       <p class="excerpt">{{ s.text_excerpt }}</p>
@@ -94,7 +97,7 @@
     <ul class="plain">
       {% for s in rows %}
       <li><span class="score">{{ s.score }}</span>
-        {% if s.is_stub %}<span class="stub">[STUB]</span> {% endif %}<a href="{{ s.url }}">{{ s.title }}</a>{% if s.company %} — {{ s.company }}{% endif %}</li>
+        {% if s.is_stub %}<span class="stub">[STUB]</span> {% endif %}<a href="{{ s.url }}">{{ s.title }}</a>{% if s.company %} — {{ s.company }}{% endif %}{% if s.staffing_flag %} <span class="staffing">via staffing</span>{% endif %}</li>
       {% endfor %}
     </ul>
     {% endfor %}

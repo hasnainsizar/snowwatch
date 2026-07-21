@@ -15,7 +15,7 @@ Generated {{ d.generated_at.strftime("%Y-%m-%d %H:%M UTC") }} · trailing {{ d.w
 {% if d.top_signals %}
 {% for s in d.top_signals %}
 {{ loop.index }}. **[{{ s.score }}]** {% if s.is_stub %}[STUB] {% endif %}{{ s.category }} — [{{ s.title }}]({{ s.url }})
-   {% if s.company %}Company: {{ s.company }} · {% endif %}Source: {{ s.source }} · {{ s.posted_at.strftime("%Y-%m-%d") }}
+   {% if s.company %}Company: {{ s.company }} · {% endif %}Source: {{ s.source }} · {{ s.posted_at.strftime("%Y-%m-%d") }}{% if s.staffing_flag %} · _via staffing_{% endif %}
    > {{ s.text_excerpt }}
 {% endfor %}
 {% else %}
@@ -29,7 +29,7 @@ _None detected this period._
 ### {{ category }} ({{ rows | length }})
 
 {% for s in rows %}
-- **[{{ s.score }}]** {% if s.is_stub %}[STUB] {% endif %}[{{ s.title }}]({{ s.url }}){% if s.company %} — {{ s.company }}{% endif %}
+- **[{{ s.score }}]** {% if s.is_stub %}[STUB] {% endif %}[{{ s.title }}]({{ s.url }}){% if s.company %} — {{ s.company }}{% endif %}{% if s.staffing_flag %} _(via staffing)_{% endif %}
 {% endfor %}
 
 {% endfor %}
