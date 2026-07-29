@@ -5,65 +5,52 @@ Generated {{ d.generated_at.strftime("%Y-%m-%d %H:%M UTC") }} · trailing {{ d.w
 **Trend:** {{ d.trend_label }}
 
 ## Sources this window
-
-{% for source, n in d.source_counts %}
+{% if d.source_counts %}{% for source, n in d.source_counts %}
 - **{{ source }}**: {{ n }}
-{% endfor %}
+{%- endfor %}{% else %}
+_No collectors returned anything in this window. Run `snowwatch collect`, then regenerate._
+{%- endif %}
 
-## Top signals by score
-
-{% if d.top_signals %}
-{% for s in d.top_signals %}
-{{ loop.index }}. **[{{ s.score }}]** {% if s.is_stub %}[STUB] {% endif %}{{ s.category }} — [{{ s.title }}]({{ s.url }})
+## Top displacement signals
+{% if d.top_signals %}{% for s in d.top_signals %}
+{{ loop.index }}. **[{{ s.score }}]** {% if s.is_stub %}[STUB] {% endif %}{{ s.category | replace("_", " ") | capitalize }} — [{{ s.title }}]({{ s.url }})
    {% if s.company %}Company: {{ s.company }} · {% endif %}Source: {{ s.source }} · {{ s.posted_at.strftime("%Y-%m-%d") }}{% if s.staffing_flag %} · _via staffing_{% endif %}
+{%- if s.text_excerpt %}
    > {{ s.text_excerpt }}
-{% endfor %}
-{% else %}
-_None detected this period._
-{% endif %}
+{%- endif %}
+{%- endfor %}{% else %}
+_No displacement signal cleared the score floor of {{ d.min_score }} this period. Quiet windows are normal; the next collection may surface more._
+{%- endif %}
 
 ## Signals by category
-
-{% if d.by_category %}
-{% for category, rows in d.by_category.items() %}
-### {{ category }} ({{ rows | length }})
-
+{% if d.by_category %}{% for category, rows in d.by_category.items() %}
+### {{ category | replace("_", " ") | capitalize }} ({{ rows | length }})
 {% for s in rows %}
 - **[{{ s.score }}]** {% if s.is_stub %}[STUB] {% endif %}[{{ s.title }}]({{ s.url }}){% if s.company %} — {{ s.company }}{% endif %}{% if s.staffing_flag %} _(via staffing)_{% endif %}
-{% endfor %}
-
-{% endfor %}
-{% else %}
-_None detected this period._
-{% endif %}
+{%- endfor %}
+{% endfor %}{% else %}
+_Nothing cleared the score floor, so there is nothing to group yet._
+{%- endif %}
 
 ## New companies detected this period
-
-{% if d.new_companies %}
-{% for company in d.new_companies %}
+{% if d.new_companies %}{% for company in d.new_companies %}
 - {{ company }}
-{% endfor %}
-{% else %}
-_None detected this period._
-{% endif %}
+{%- endfor %}{% else %}
+_No company appeared for the first time in this window. Companies land here when a signal carries its own displacement context, not just a vendor mention._
+{%- endif %}
 
 ## Suggested outreach angles
-
-{% if d.outreach %}
-{% for s, angle in d.outreach %}
-### {{ s.company or s.author }} — score {{ s.score }} ({{ s.category }})
+{% if d.outreach %}{% for s, angle in d.outreach %}
+### {{ s.company or s.author }} — score {{ s.score }} ({{ s.category | replace("_", " ") | capitalize }})
 
 [{{ s.title }}]({{ s.url }})
 
 {{ angle }}
-
-{% endfor %}
-{% else %}
-_None detected this period._
-{% endif %}
-
+{% endfor %}{% else %}
+_No signal reached the outreach threshold of {{ d.outreach_threshold }}. Angles appear here for displacement signals scoring {{ d.outreach_threshold }} or above._
+{%- endif %}
 {% if d.suppressed_low_score %}
 ---
 
 _{{ d.suppressed_low_score }} low-score signals suppressed — see stats._
-{% endif %}
+{%- endif %}

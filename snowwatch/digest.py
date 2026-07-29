@@ -63,6 +63,16 @@ class DigestData:
     suppressed_low_score: int
 
     @property
+    def min_score(self) -> int:
+        """Score floor below which signals are suppressed from the digest."""
+        return config.DIGEST_MIN_SCORE
+
+    @property
+    def outreach_threshold(self) -> int:
+        """Score at or above which a displacement signal earns an outreach angle."""
+        return HIGH_SCORE_THRESHOLD
+
+    @property
     def trend_delta(self) -> int:
         return self.total_signals - self.prior_signals
 

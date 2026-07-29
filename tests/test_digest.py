@@ -81,7 +81,9 @@ def test_markdown_renders(tmp_path, migration_signal, cost_signal):
         md = digest.render_markdown(data)
     assert "Snowwatch Digest" in md
     assert "migrating off Snowflake" in md
-    assert "MIGRATION_INTENT" in md
+    # Categories render as human labels, not the raw enum token.
+    assert "Migration intent" in md
+    assert "MIGRATION_INTENT" not in md
 
 
 def test_default_window_is_14():

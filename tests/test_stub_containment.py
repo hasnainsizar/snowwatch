@@ -43,7 +43,7 @@ def test_include_stubs_surfaces_and_tags(tmp_path):
         html = digest.render_html(data)
     assert any(s.is_stub for s in data.top_signals)
     assert "[STUB]" in md
-    assert "[STUB]" in html
+    assert "STUB" in html
 
 
 def test_legacy_stub_rows_migrated(tmp_path):

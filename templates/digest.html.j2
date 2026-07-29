@@ -6,132 +6,351 @@
 <title>Snowwatch Digest — {{ d.generated_at.strftime("%Y-%m-%d") }}</title>
 <style>
   :root {
-    --bg: #0f172a; --panel: #1e293b; --panel2: #263449; --ink: #e2e8f0;
-    --muted: #94a3b8; --accent: #38bdf8; --hot: #f97316; --line: #334155;
+    color-scheme: light;
+
+    /* Surfaces: near-neutral off-white, tinted a whisper toward the signal hue. */
+    --bg:        oklch(0.976 0.003 22);
+    --surface:   oklch(0.995 0.001 22);
+    --surface-2: oklch(0.955 0.005 22);
+
+    /* Rules */
+    --rule:        oklch(0.885 0.006 22);
+    --rule-strong: oklch(0.72 0.010 22);
+    --rule-heavy:  oklch(0.30 0.020 22);
+
+    /* Ink */
+    --ink:     oklch(0.23 0.015 22);
+    --ink-2:   oklch(0.40 0.014 22);
+    --muted:   oklch(0.52 0.012 22);
+
+    /* One signal color carries scores, thresholds, and links. */
+    --signal:      oklch(0.42 0.150 22);
+    --signal-deep: oklch(0.34 0.130 22);
+    --signal-tint: oklch(0.94 0.030 22);
+    --signal-on:   oklch(0.98 0.010 22);
+
+    --serif: ui-serif, "Iowan Old Style", "Source Serif Pro", Georgia, "Times New Roman", serif;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+
+    --s1: 4px;  --s2: 8px;  --s3: 12px; --s4: 16px;
+    --s5: 24px; --s6: 36px; --s7: 56px;
+
+    --ease: cubic-bezier(0.22, 1, 0.36, 1);
   }
+
   * { box-sizing: border-box; }
-  body { margin: 0; background: var(--bg); color: var(--ink);
-    font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-  .wrap { max-width: 900px; margin: 0 auto; padding: 32px 20px 80px; }
-  header { border-bottom: 2px solid var(--line); padding-bottom: 16px; margin-bottom: 24px; }
-  h1 { margin: 0 0 4px; font-size: 26px; letter-spacing: -0.02em; }
-  .meta { color: var(--muted); font-size: 13px; }
-  .trend { margin-top: 6px; font-size: 13px; font-weight: 600; color: var(--muted); }
-  .trend.up { color: #4ade80; }
-  .trend.down { color: #f87171; }
-  h2 { font-size: 18px; margin: 36px 0 12px; color: var(--accent);
-    border-left: 3px solid var(--accent); padding-left: 10px; }
-  h3 { font-size: 15px; margin: 20px 0 8px; }
-  .chips { display: flex; flex-wrap: wrap; gap: 8px; }
-  .chip { background: var(--panel); border: 1px solid var(--line); border-radius: 999px;
-    padding: 4px 12px; font-size: 13px; color: var(--muted); }
-  .chip b { color: var(--ink); }
-  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
-    padding: 14px 16px; margin: 10px 0; }
-  .card .head { display: flex; align-items: baseline; gap: 10px; }
-  .score { font-weight: 700; font-size: 13px; min-width: 38px; text-align: center;
-    border-radius: 6px; padding: 3px 6px; background: var(--panel2); }
-  .score.hot { background: var(--hot); color: #1a1005; }
-  .cat { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
-  a { color: var(--accent); text-decoration: none; }
-  a:hover { text-decoration: underline; }
-  .sub { color: var(--muted); font-size: 12px; margin: 4px 0 0; }
-  .stub { color: var(--hot); font-weight: 700; font-size: 11px; letter-spacing: 0.03em; }
-  .staffing { color: var(--muted); font-size: 11px; font-style: italic;
-    border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; }
-  .suppressed { color: var(--muted); font-size: 12px; margin-top: 28px;
-    border-top: 1px solid var(--line); padding-top: 12px; }
-  .excerpt { color: var(--ink); font-size: 13px; margin: 8px 0 0; padding-left: 12px;
-    border-left: 2px solid var(--line); }
-  ul.plain { list-style: none; padding: 0; margin: 0; }
-  ul.plain li { padding: 6px 0; border-bottom: 1px solid var(--line); }
-  ul.plain li:last-child { border-bottom: none; }
-  .angle { background: var(--panel2); border-radius: 10px; padding: 14px 16px; margin: 10px 0;
-    border-left: 3px solid var(--hot); }
-  .empty { color: var(--muted); font-style: italic; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font: 15px/1.65 var(--sans);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  .wrap { max-width: 780px; margin: 0 auto; padding: var(--s6) var(--s5) var(--s7); }
+  @media (max-width: 560px) { .wrap { padding: var(--s5) var(--s4) var(--s6); } }
+
+  /* ---------- Masthead ---------- */
+
+  .masthead { border-top: 3px solid var(--rule-heavy); padding-top: var(--s3); }
+  .masthead .strap {
+    display: flex; align-items: baseline; justify-content: space-between; gap: var(--s4);
+    font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--muted); font-weight: 600;
+  }
+  .masthead .strap .mark { color: var(--ink); }
+  h1 {
+    font-family: var(--serif); font-weight: 600; font-size: 34px; line-height: 1.15;
+    letter-spacing: -0.015em; margin: var(--s3) 0 var(--s2); text-wrap: balance;
+  }
+  .standfirst {
+    font-family: var(--serif); font-size: 17px; line-height: 1.5; color: var(--ink-2);
+    margin: 0 0 var(--s4); max-width: 60ch; text-wrap: pretty;
+  }
+  .standfirst .delta { font-weight: 600; color: var(--ink); font-variant-numeric: tabular-nums; }
+  .standfirst .delta.up { color: var(--signal); }
+  .masthead .rule { border: 0; border-top: 1px solid var(--rule-strong); margin: 0; }
+
+  /* ---------- Sections ---------- */
+
+  section { margin-top: var(--s7); }
+  h2 {
+    font-family: var(--serif); font-weight: 600; font-size: 21px; letter-spacing: -0.01em;
+    margin: 0; padding-bottom: var(--s2); border-bottom: 1px solid var(--rule-strong);
+    display: flex; align-items: baseline; justify-content: space-between; gap: var(--s4);
+  }
+  h2 .count {
+    font-family: var(--sans); font-size: 11.5px; font-weight: 600; letter-spacing: 0.1em;
+    text-transform: uppercase; color: var(--muted); font-variant-numeric: tabular-nums;
+    white-space: nowrap; flex: none;
+  }
+  h3 {
+    font-size: 14px; font-weight: 700; margin: var(--s5) 0 0;
+    padding-bottom: var(--s1); border-bottom: 1px solid var(--rule);
+    display: flex; align-items: baseline; justify-content: space-between; gap: var(--s3);
+  }
+  h3 .count { font-weight: 500; color: var(--muted); font-variant-numeric: tabular-nums; font-size: 12.5px; }
+
+  .legend { color: var(--muted); font-size: 12.5px; margin: var(--s2) 0 0; }
+
+  /* ---------- Links ---------- */
+
+  a {
+    color: var(--signal-deep); text-decoration: underline; text-decoration-thickness: 1px;
+    text-underline-offset: 2px; text-decoration-color: color-mix(in oklch, var(--signal) 35%, transparent);
+    overflow-wrap: anywhere; transition: text-decoration-color 160ms var(--ease), color 160ms var(--ease);
+  }
+  a:hover { color: var(--signal); text-decoration-color: currentColor; }
+  a:focus-visible { outline: 2px solid var(--signal); outline-offset: 3px; border-radius: 2px; }
+
+  /* ---------- Inline data lines ---------- */
+
+  /* Separators hang off the preceding item so a wrap never starts a line with "·". */
+  .tally { list-style: none; display: flex; flex-wrap: wrap; margin: var(--s3) 0 0; padding: 0; font-size: 14px; }
+  .tally li { color: var(--ink-2); }
+  .tally li:not(:last-child)::after { content: "·"; color: var(--rule-strong); padding: 0 var(--s2); }
+  .tally b { color: var(--ink); font-variant-numeric: tabular-nums; }
+
+  /* ---------- Ruled signal register ---------- */
+
+  .register { list-style: none; margin: 0; padding: 0; }
+  .register > li { border-bottom: 1px solid var(--rule); }
+  .register > li:last-child { border-bottom: 0; }
+  .entry { display: grid; grid-template-columns: 52px 1fr; gap: var(--s4); padding: var(--s4) 0; }
+  .entry .gutter { border-right: 1px solid var(--rule); padding-right: var(--s3); text-align: right; }
+
+  .score {
+    display: inline-block; min-width: 34px; padding: 1px 5px; border-radius: 3px;
+    font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums;
+    background: var(--surface-2); color: var(--ink-2); border: 1px solid var(--rule);
+  }
+  .score.warm { background: var(--signal-tint); color: var(--signal-deep); border-color: var(--signal-tint); }
+  .score.hot { background: var(--signal); color: var(--signal-on); border-color: var(--signal); }
+
+  .headline {
+    font-family: var(--serif); font-size: 18px; line-height: 1.35; font-weight: 600;
+    margin: 0; text-wrap: pretty;
+  }
+  .headline a { color: var(--ink); text-decoration-color: var(--rule); text-underline-offset: 3px; }
+  .headline a:hover { color: var(--signal-deep); text-decoration-color: currentColor; }
+  .byline { font-size: 12.5px; color: var(--muted); margin: var(--s1) 0 0; }
+  .byline .cat { font-weight: 700; color: var(--ink-2); letter-spacing: 0.01em; }
+  /* Inline flow, no spaces around the bullets: a line can never break onto a separator. */
+  .byline .sep { color: var(--rule-strong); padding: 0 var(--s2); }
+  .byline .staffing { margin-left: var(--s2); }
+  .byline .terms { color: var(--ink-2); }
+  .stub {
+    font-family: var(--sans); font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em;
+    color: var(--signal-on); background: var(--signal-deep); border-radius: 2px;
+    padding: 1px 4px; vertical-align: 2px; white-space: nowrap;
+  }
+  .staffing {
+    font-size: 11px; color: var(--ink-2); border: 1px solid var(--rule-strong);
+    border-radius: 2px; padding: 0 4px; white-space: nowrap;
+  }
+  .excerpt {
+    font-family: var(--serif); font-size: 15px; line-height: 1.55; color: var(--ink-2);
+    max-width: 66ch; margin: var(--s3) 0 0; text-wrap: pretty;
+  }
+
+  /* ---------- Compact category rows ---------- */
+
+  .rows { list-style: none; margin: 0; padding: 0; }
+  .rows li {
+    display: grid; grid-template-columns: 52px 1fr; gap: var(--s4);
+    padding: var(--s2) 0; border-bottom: 1px solid var(--rule); font-size: 14.5px; line-height: 1.5;
+  }
+  .rows li:last-child { border-bottom: 0; }
+  .rows .gutter { border-right: 1px solid var(--rule); padding-right: var(--s3); text-align: right; }
+  .rows .body { text-wrap: pretty; }
+  .rows .company { color: var(--muted); }
+
+  /* ---------- Outreach ---------- */
+
+  .angles { list-style: none; margin: 0; padding: 0; }
+  .angles > li { padding: var(--s4) 0; border-bottom: 1px solid var(--rule); }
+  .angles > li:last-child { border-bottom: 0; }
+  .angle-head { display: flex; align-items: baseline; flex-wrap: wrap; gap: var(--s2); margin: 0; }
+  .angle-head .who { font-family: var(--serif); font-size: 18px; font-weight: 600; }
+  .angle-head .cat { font-size: 12px; font-weight: 700; color: var(--muted); }
+  .angle-source { font-size: 13px; margin: var(--s1) 0 0; }
+  .angle-body {
+    font-size: 14.5px; line-height: 1.6; color: var(--ink-2); max-width: 66ch;
+    margin: var(--s2) 0 0; padding-left: var(--s3); border-left: 1px solid var(--rule-strong);
+    text-wrap: pretty;
+  }
+
+  /* ---------- Empty + footer ---------- */
+
+  .empty {
+    font-family: var(--serif); font-style: italic; font-size: 15px; color: var(--muted);
+    margin: var(--s4) 0 0; max-width: 62ch; text-wrap: pretty;
+  }
+  .colophon {
+    margin: var(--s7) 0 0; padding-top: var(--s3); border-top: 3px solid var(--rule-heavy);
+    font-size: 12.5px; color: var(--muted);
+  }
+  code { font-family: var(--mono); font-size: 0.9em; color: var(--ink-2); }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { transition-duration: 1ms !important; animation-duration: 1ms !important; }
+  }
+
+  @media (max-width: 560px) {
+    h1 { font-size: 27px; }
+    .masthead .strap { font-size: 11px; letter-spacing: 0.08em; }
+    h2 { font-size: 19px; }
+    .entry, .rows li { grid-template-columns: 44px 1fr; gap: var(--s3); }
+    .headline { font-size: 16.5px; }
+  }
+
+  @media print {
+    body { font-size: 10.5pt; background: #fff; }
+    .wrap { max-width: none; padding: 0; }
+    a { color: var(--ink); text-decoration: none; }
+    a[href]::after { content: " (" attr(href) ")"; font-size: 8pt; color: var(--muted); word-break: break-all; }
+    .entry, .rows li, .angles > li, section { break-inside: avoid; }
+    h2, h3 { break-after: avoid; }
+  }
 </style>
 </head>
 <body>
 <div class="wrap">
-  <header>
-    <h1>Snowwatch Digest</h1>
-    <div class="meta">Generated {{ d.generated_at.strftime("%Y-%m-%d %H:%M UTC") }}
-      · trailing {{ d.window_days }} days · {{ d.total_signals }} signals</div>
-    <div class="trend {% if d.trend_delta > 0 %}up{% elif d.trend_delta < 0 %}down{% endif %}">
-      Trend: {{ d.trend_label }}</div>
+  <header class="masthead">
+    <p class="strap">
+      <span class="mark">Snowwatch</span>
+      <time datetime="{{ d.generated_at.strftime('%Y-%m-%dT%H:%M:%SZ') }}">{{ d.generated_at.strftime("%d %b %Y · %H:%M UTC") }}</time>
+    </p>
+    <h1>Displacement digest</h1>
+    <p class="standfirst">
+      {{ d.total_signals }} signal{{ "" if d.total_signals == 1 else "s" }} collected across the trailing {{ d.window_days }} days,
+      against {{ d.prior_signals }} in the prior window
+      <span class="delta {% if d.trend_delta > 0 %}up{% endif %}">({{ "+" if d.trend_delta > 0 }}{{ d.trend_delta }})</span>.
+    </p>
+    <hr class="rule">
   </header>
 
-  <div class="chips">
-    {% for source, n in d.source_counts %}
-    <span class="chip"><b>{{ n }}</b> {{ source }}</span>
-    {% endfor %}
-  </div>
+  <main>
+    <section aria-labelledby="h-sources">
+      <h2 id="h-sources">Sources <span class="count">{{ d.source_counts | length }} active</span></h2>
+      {% if d.source_counts %}
+        <ul class="tally">
+          {% for source, n in d.source_counts %}
+          <li><b>{{ n }}</b> {{ source }}</li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <p class="empty">No collector returned anything in this window. Run <code>snowwatch collect</code>, then regenerate.</p>
+      {% endif %}
+    </section>
 
-  <h2>Top signals by score</h2>
-  {% if d.top_signals %}
-    {% for s in d.top_signals %}
-    <div class="card">
-      <div class="head">
-        <span class="score {% if s.score >= 55 %}hot{% endif %}">{{ s.score }}</span>
-        <div>
-          <span class="cat">{% if s.is_stub %}<span class="stub">[STUB]</span> {% endif %}{{ s.category }}</span><br>
-          <a href="{{ s.url }}">{{ s.title }}</a>
-        </div>
-      </div>
-      <p class="sub">
-        {% if s.company %}{{ s.company }} · {% endif %}{{ s.source }} · {{ s.posted_at.strftime("%Y-%m-%d") }}
-        {% if s.staffing_flag %} · <span class="staffing">via staffing</span>{% endif %}
-        {% if s.matched_terms %} · {{ s.matched_terms | join(", ") }}{% endif %}
-      </p>
-      <p class="excerpt">{{ s.text_excerpt }}</p>
-    </div>
-    {% endfor %}
-  {% else %}
-    <p class="empty">None detected this period.</p>
-  {% endif %}
+    <section aria-labelledby="h-top">
+      <h2 id="h-top">Top displacement signals <span class="count">{{ d.top_signals | length }} listed</span></h2>
+      {% if d.top_signals %}
+        <p class="legend">Scores run 0–100. {{ d.outreach_threshold }}+ is outreach-ready; below {{ d.min_score }} is suppressed.</p>
+        <ol class="register">
+          {% for s in d.top_signals %}
+          <li>
+            <article class="entry">
+              <div class="gutter">
+                <span class="score {% if s.score >= 55 %}hot{% elif s.score >= 40 %}warm{% endif %}"
+                      title="Signal score {{ s.score }}{% if s.score >= d.outreach_threshold %} — outreach-ready{% endif %}">{{ s.score }}</span>
+              </div>
+              <div>
+                <p class="headline">
+                  {%- if s.is_stub %}<span class="stub">STUB</span> {% endif -%}
+                  <a href="{{ s.url }}">{{ s.title }}</a>
+                </p>
+                <p class="byline">
+                  <span class="cat">{{ s.category | replace("_", " ") | capitalize }}</span>
+                  {%- if s.company %}<span class="sep">·</span>{{ s.company }}{% endif -%}
+                  <span class="sep">·</span>{{ s.source }}
+                  <span class="sep">·</span><time datetime="{{ s.posted_at.strftime('%Y-%m-%d') }}">{{ s.posted_at.strftime("%d %b") }}</time>
+                  {%- if s.staffing_flag %} <span class="staffing">via staffing</span>{% endif -%}
+                  {%- if s.matched_terms %}<span class="sep">·</span><span class="terms">{{ s.matched_terms | join(", ") }}</span>{% endif -%}
+                </p>
+                {% if s.text_excerpt %}<p class="excerpt">{{ s.text_excerpt }}</p>{% endif %}
+              </div>
+            </article>
+          </li>
+          {% endfor %}
+        </ol>
+      {% else %}
+        <p class="empty">No displacement signal cleared the score floor of {{ d.min_score }} this period. Quiet windows are normal; the next collection may surface more.</p>
+      {% endif %}
+    </section>
 
-  <h2>Signals by category</h2>
-  {% if d.by_category %}
-    {% for category, rows in d.by_category.items() %}
-    <h3>{{ category }} <span class="cat">({{ rows | length }})</span></h3>
-    <ul class="plain">
-      {% for s in rows %}
-      <li><span class="score">{{ s.score }}</span>
-        {% if s.is_stub %}<span class="stub">[STUB]</span> {% endif %}<a href="{{ s.url }}">{{ s.title }}</a>{% if s.company %} — {{ s.company }}{% endif %}{% if s.staffing_flag %} <span class="staffing">via staffing</span>{% endif %}</li>
-      {% endfor %}
-    </ul>
-    {% endfor %}
-  {% else %}
-    <p class="empty">None detected this period.</p>
-  {% endif %}
+    <section aria-labelledby="h-cats">
+      <h2 id="h-cats">Signals by category <span class="count">{{ d.by_category | length }} categories</span></h2>
+      {% if d.by_category %}
+        {% for category, rows in d.by_category.items() %}
+        <h3>{{ category | replace("_", " ") | capitalize }} <span class="count">{{ rows | length }}</span></h3>
+        <ul class="rows">
+          {% for s in rows %}
+          <li>
+            <span class="gutter">
+              <span class="score {% if s.score >= 55 %}hot{% elif s.score >= 40 %}warm{% endif %}"
+                    title="Signal score {{ s.score }}">{{ s.score }}</span>
+            </span>
+            <span class="body">
+              {%- if s.is_stub %}<span class="stub">STUB</span> {% endif -%}
+              <a href="{{ s.url }}">{{ s.title }}</a>
+              {%- if s.company %} <span class="company">— {{ s.company }}</span>{% endif -%}
+              {%- if s.staffing_flag %} <span class="staffing">via staffing</span>{% endif -%}
+            </span>
+          </li>
+          {% endfor %}
+        </ul>
+        {% endfor %}
+      {% else %}
+        <p class="empty">Nothing cleared the score floor, so there is nothing to group yet.</p>
+      {% endif %}
+    </section>
 
-  <h2>New companies detected this period</h2>
-  {% if d.new_companies %}
-    <div class="chips">
-      {% for company in d.new_companies %}
-      <span class="chip"><b>{{ company }}</b></span>
-      {% endfor %}
-    </div>
-  {% else %}
-    <p class="empty">None detected this period.</p>
-  {% endif %}
+    <section aria-labelledby="h-new">
+      <h2 id="h-new">New companies <span class="count">{{ d.new_companies | length }} first seen</span></h2>
+      {% if d.new_companies %}
+        <ul class="tally">
+          {% for company in d.new_companies %}
+          <li><b>{{ company }}</b></li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <p class="empty">No company appeared for the first time in this window. Companies land here when a signal carries its own displacement context, not just a vendor mention.</p>
+      {% endif %}
+    </section>
 
-  <h2>Suggested outreach angles</h2>
-  {% if d.outreach %}
-    {% for s, angle in d.outreach %}
-    <div class="angle">
-      <h3>{{ s.company or s.author }} — score {{ s.score }} <span class="cat">({{ s.category }})</span></h3>
-      <p class="sub"><a href="{{ s.url }}">{{ s.title }}</a></p>
-      <p>{{ angle }}</p>
-    </div>
-    {% endfor %}
-  {% else %}
-    <p class="empty">None detected this period.</p>
-  {% endif %}
+    <section aria-labelledby="h-outreach">
+      <h2 id="h-outreach">Suggested outreach angles <span class="count">{{ d.outreach | length }} drafted</span></h2>
+      {% if d.outreach %}
+        <ul class="angles">
+          {% for s, angle in d.outreach %}
+          <li>
+            <article>
+              <p class="angle-head">
+                <span class="score {% if s.score >= 55 %}hot{% elif s.score >= 40 %}warm{% endif %}"
+                      title="Signal score {{ s.score }}">{{ s.score }}</span>
+                <span class="who">{{ s.company or s.author }}</span>
+                <span class="cat">{{ s.category | replace("_", " ") | capitalize }}</span>
+              </p>
+              <p class="angle-source"><a href="{{ s.url }}">{{ s.title }}</a></p>
+              <p class="angle-body">{{ angle }}</p>
+            </article>
+          </li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <p class="empty">No signal reached the outreach threshold of {{ d.outreach_threshold }}. Angles appear here for displacement signals scoring {{ d.outreach_threshold }} or above.</p>
+      {% endif %}
+    </section>
+  </main>
 
-  {% if d.suppressed_low_score %}
-  <p class="suppressed">{{ d.suppressed_low_score }} low-score signals suppressed — see stats.</p>
-  {% endif %}
+  <p class="colophon">
+    {% if d.suppressed_low_score %}{{ d.suppressed_low_score }} low-score signal{{ "" if d.suppressed_low_score == 1 else "s" }} suppressed below the score floor of {{ d.min_score }}. {% endif %}Generated offline by Snowwatch — run <code>snowwatch stats</code> for the full breakdown.
+  </p>
 </div>
 </body>
 </html>
