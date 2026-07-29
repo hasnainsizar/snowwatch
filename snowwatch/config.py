@@ -226,6 +226,39 @@ MIGRATION_INBOUND_PHRASES: list[str] = [
     "consolidating on snowflake",
 ]
 
+# Migration phrases that name a migration without stating its direction. They
+# cannot settle direction on their own: "Snowflake migration" heads job posts
+# for teams moving onto Snowflake as often as ones leaving it. Must be a subset
+# of SIGNAL_PHRASES["migration_intent"].
+AMBIGUOUS_MIGRATION_PHRASES: frozenset[str] = frozenset(
+    {
+        "replatform",
+        "replatforming",
+        "snowflake migration",
+    }
+)
+
+# Inbound constructions where a verb or source system sits between the direction
+# word and "to snowflake", which plain substrings miss ("transitioning our data
+# platform from Microsoft SQL Server to Snowflake"). Sentence punctuation is
+# excluded from the gap so a match cannot bridge two sentences. Regex, matched
+# case-insensitively against signal content.
+MIGRATION_INBOUND_PATTERNS: list[str] = [
+    r"\b(?:migrat(?:e|es|ed|ing|ion)|transition(?:s|ed|ing)?|mov(?:e|es|ing)|"
+    r"port(?:s|ed|ing)?|shift(?:s|ed|ing)?|consolidat(?:e|es|ed|ing)|"
+    r"replatform(?:s|ed|ing)?)\b[^.!?\n]{0,80}?\bto\s+snowflake\b",
+    r"\bfrom\s+(?!snowflake\b)[^.!?\n]{1,60}?\bto\s+snowflake\b",
+]
+
+# Outbound constructions that state displacement away from Snowflake. Direction
+# is resolved outbound-first, so these win when a text somehow reads both ways.
+# Regex, matched case-insensitively against signal content.
+MIGRATION_OUTBOUND_PATTERNS: list[str] = [
+    r"\bfrom\s+snowflake\s+(?:to|onto|over\s+to)\b",
+    r"\boff\s+(?:of\s+)?snowflake\b",
+    r"\baway\s+from\s+snowflake\b",
+]
+
 # Positive-context phrases that dampen cost/performance/negativity buckets: a
 # satisfied mention should not register as pain. Lowercase, substring match.
 POSITIVE_CONTEXT_PHRASES: list[str] = [

@@ -38,6 +38,8 @@ _POSITIVE_SUPPRESSED = ("cost_pain", "performance_complaint", "general_negativit
 _TOPIC_BUCKETS = frozenset({"migration_intent", "cost_pain", "performance_complaint"})
 
 _SKILLS_CONTEXT_RE = [re.compile(p, re.IGNORECASE) for p in config.SKILLS_CONTEXT_PATTERNS]
+_INBOUND_RE = [re.compile(p, re.IGNORECASE) for p in config.MIGRATION_INBOUND_PATTERNS]
+_OUTBOUND_RE = [re.compile(p, re.IGNORECASE) for p in config.MIGRATION_OUTBOUND_PATTERNS]
 
 
 def _is_job_source(source: str | None) -> bool:
@@ -76,6 +78,28 @@ def _has_data_context(content: str) -> bool:
     return any(term in content for term in config.DATA_CONTEXT_TERMS)
 
 
+def _is_outbound(content: str, raw: dict[str, list[str]]) -> bool:
+    """True when the text states movement away from Snowflake.
+
+    Only directional phrases count. An ambiguous match like "snowflake
+    migration" names a migration without a direction, so it cannot claim
+    outbound and mask an inbound construction in the same text.
+    """
+    directional = [
+        phrase
+        for phrase in raw.get("migration_intent", [])
+        if phrase not in config.AMBIGUOUS_MIGRATION_PHRASES
+    ]
+    return bool(directional) or any(pattern.search(content) for pattern in _OUTBOUND_RE)
+
+
+def _is_inbound(content: str) -> bool:
+    """True when the text states movement onto Snowflake."""
+    if any(phrase in content for phrase in config.MIGRATION_INBOUND_PHRASES):
+        return True
+    return any(pattern.search(content) for pattern in _INBOUND_RE)
+
+
 def matched_phrases(content: str) -> dict[str, list[str]]:
     """Return, per signal bucket, the configured phrases present in the text."""
     hits: dict[str, list[str]] = {}
@@ -89,16 +113,18 @@ def matched_phrases(content: str) -> dict[str, list[str]]:
 def analyze(content: str, source: str | None = None) -> Analysis:
     """Resolve effective phrase buckets after direction, sentiment, and topic guards.
 
-    Inbound (moving TO Snowflake) without an explicit outbound phrase drops the
-    migration bucket; positive sentiment drops the pain buckets. A signal with no
+    Inbound (moving TO Snowflake) without a directional outbound phrase drops
+    the migration bucket, so an ambiguous "snowflake migration" in a posting
+    about migrating onto Snowflake no longer reads as displacement intent.
+    Positive sentiment drops the pain buckets. A signal with no
     topic-establishing bucket and no data-warehouse vocabulary is off-topic (e.g.
     snow/weather or the CDP product): its buckets and inbound flag are cleared so
     it scores to OTHER. For job postings, a competitor mention in a skills list
     without evaluative language does not count as a vendor comparison.
     """
     raw = matched_phrases(content)
-    outbound = "migration_intent" in raw
-    inbound = any(p in content for p in config.MIGRATION_INBOUND_PHRASES) and not outbound
+    outbound = _is_outbound(content, raw)
+    inbound = _is_inbound(content) and not outbound
     positive = any(p in content for p in config.POSITIVE_CONTEXT_PHRASES)
 
     buckets = dict(raw)

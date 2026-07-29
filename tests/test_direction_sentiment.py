@@ -2,9 +2,24 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from snowwatch import classifier
+import httpx
+
+from snowwatch import classifier, config
+from snowwatch.collectors.jobs import StubJobSource
 from snowwatch.models import Signal
 from snowwatch.scoring import analyze, score_signal
+
+# Real 30-day digest excerpt that scored 57 MIGRATION_INTENT: the ambiguous
+# "Snowflake Migration" headline masked an explicitly inbound body.
+MILESTONE_TITLE = "Snowflake Migration Data Architect"
+MILESTONE_EXCERPT = (
+    "Snowflake Migration Data Architect Onsite in Burbank CA 9 Months Contract "
+    "Summary Seeking a Senior level Data Analyst/Data Architect to support a "
+    "critical enterprise data migration initiative, transitioning our data "
+    "platform from Microsoft SQL Server to Snowflake. This resource will design "
+    "scalable data architectures, build robust migration pipelines, and enable "
+    "modern self-service analytics through Tableau and Power BI."
+)
 
 
 def _signal(title: str, body: str = "") -> Signal:
@@ -62,6 +77,75 @@ def test_positive_sentiment_suppresses_performance():
 def test_genuine_cost_pain_still_detected():
     sig = _signal("Our snowflake bill is too expensive")
     assert classifier.classify(sig) == classifier.COST_PAIN
+
+
+def test_ambiguous_phrases_are_migration_intent_phrases():
+    # The ambiguity guard only bites on phrases the intent bucket actually
+    # matches; a rename on one side would silently disable it.
+    assert config.AMBIGUOUS_MIGRATION_PHRASES <= set(config.SIGNAL_PHRASES["migration_intent"])
+
+
+def test_milestone_posting_classifies_inbound():
+    sig = _signal(MILESTONE_TITLE, MILESTONE_EXCERPT)
+    sig.source = "jobs"
+    score_signal(sig)
+    assert classifier.classify(sig) == classifier.MIGRATION_INBOUND
+
+
+def test_milestone_posting_falls_below_digest_floor():
+    sig = _signal(MILESTONE_TITLE, MILESTONE_EXCERPT)
+    sig.source = "jobs"
+    assert score_signal(sig) < config.DIGEST_MIN_SCORE
+
+
+def test_from_x_to_snowflake_is_inbound():
+    phrases = [
+        "transitioning our data platform from Microsoft SQL Server to Snowflake",
+        "migrating our warehouse from Redshift to Snowflake",
+        "a migration from Teradata to Snowflake",
+        "moving the reporting stack from BigQuery to Snowflake",
+        "porting legacy SQL Server workloads to Snowflake",
+    ]
+    for phrase in phrases:
+        sig = _signal("Data engineer", phrase)
+        score_signal(sig)
+        assert classifier.classify(sig) == classifier.MIGRATION_INBOUND, phrase
+
+
+def test_to_snowflake_beats_ambiguous_migration_term():
+    sig = _signal(
+        "Snowflake migration engineer",
+        "Own the snowflake migration: we are transitioning our warehouse from Oracle to Snowflake.",
+    )
+    score_signal(sig)
+    assert classifier.classify(sig) == classifier.MIGRATION_INBOUND
+    assert sig.score < config.DIGEST_MIN_SCORE
+
+
+def test_inbound_construction_takes_the_penalty():
+    inbound = _signal("Snowflake migration lead", "migrating our data warehouse from Redshift to Snowflake")
+    ambiguous = _signal("Snowflake migration lead", "own the snowflake migration roadmap for the data warehouse")
+    assert score_signal(inbound) < score_signal(ambiguous)
+
+
+def test_outbound_keeps_priority_over_inbound_construction():
+    sig = _signal(
+        "Warehouse replatform",
+        "We are migrating off Snowflake this year, reversing last year's move from Redshift to Snowflake.",
+    )
+    assert classifier.classify(sig) == classifier.MIGRATION_INTENT
+
+
+def test_from_snowflake_to_competitor_is_not_inbound():
+    sig = _signal("Warehouse move", "we are moving from snowflake to databricks next quarter")
+    assert classifier.classify(sig) != classifier.MIGRATION_INBOUND
+
+
+def test_stub_migration_text_still_scores_high():
+    signals = StubJobSource().fetch(httpx.Client(), [])
+    migration = next(s for s in signals if "Migration" in s.title)
+    assert score_signal(migration) >= 90
+    assert classifier.classify(migration) == classifier.MIGRATION_INTENT
 
 
 def test_analyze_flags():
