@@ -1,4 +1,4 @@
-# snowwatch
+# Snowwatch
 
 3 live sources · no API keys required · 150 tests
 
