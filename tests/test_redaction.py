@@ -8,8 +8,10 @@ import pytest
 from snowwatch.collectors.base import CollectorError, polite_get
 from snowwatch.logutil import RedactingFilter, configure_logging, redact, request_line
 
-_KEY = "b74298708a9dd0ddf69af1dbc6f51e91"
-_ID = "a1b2c3d4"
+# Synthetic credentials. Never paste a real app id or key here: this file is
+# committed, and the redaction it exercises is exactly what keeps them out.
+_KEY = "0123456789abcdef0123456789abcdef"
+_ID = "fedcba98"
 _ADZUNA = f"https://api.adzuna.com/v1/api/jobs/us/search/1?app_id={_ID}&app_key={_KEY}&what=snowflake"
 
 
