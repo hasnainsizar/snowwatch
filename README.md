@@ -1,5 +1,7 @@
 # snowwatch
 
+3 live sources · no API keys required · 150 tests
+
 A competitive displacement signal monitor. Snowwatch tracks public signals of
 Snowflake customer pain — cost complaints, migration chatter, performance gripes,
 vendor comparisons — and rolls them into a periodic digest built for sales
@@ -116,25 +118,16 @@ top signals ranked by score (displacement categories only), the same signals
 grouped by category, new companies detected in the window, and a tailored
 outreach angle for every high-score displacement signal.
 
-![Sample snowwatch HTML digest](docs/digest-sample.png)
+![Snowwatch HTML digest from live sources](docs/digest-sample.png)
 
-*The HTML digest is a self-contained styled page; score badges turn orange above
-the outreach threshold. Generate one with `snowwatch digest` and drop a
-screenshot at `docs/digest-sample.png`.*
+*Signals collected across live sources over a trailing 30-day window, with
+low-score noise suppressed.*
 
-```
-# Snowwatch Digest — trailing 14 days
-Generated 2026-07-20 18:10 UTC · trailing 14 days · 9 signals
-Trend: 9 this period vs 6 prior (+3)
+![Snowwatch HTML digest including seeded demonstration signals](docs/digest-demo.png)
 
-## Top signals by score
-1. [97] MIGRATION_INTENT — Senior Data Engineer — Snowflake Migration
-   Company: Northwind Analytics · Source: jobs · 2026-07-18
-   > We are replatforming off Snowflake to reduce compute cost...
-2. [65] COST_PAIN — Analytics Engineer (Cost Optimization Snowflake)
-   Company: Brightloom Inc · Source: jobs · 2026-07-15
-   > Our Snowflake bill is growing fast...
-```
+*The same digest rendered with seeded demonstration signals (`--include-stubs`,
+tagged `[STUB]`) to show the alert path: a high-score migration posting with a
+drafted outreach angle.*
 
 ## How scoring works
 
