@@ -24,7 +24,7 @@ the digest reads back the trailing window and renders it.
                                       v
                           +------------------------+
                           |   db (SQLite)          |
-                          |  dedupe by url_hash    |
+                          | dedupe by canonical url|
                           +-----------+------------+
                                       | signals_since(window)
                                       v
@@ -47,7 +47,11 @@ Each stage is pure and independently testable:
   `classifier.classify` consume it, so a signal cannot score as displacement
   pain while being classified as inbound.
 - `db` enforces dedupe at the schema level (`UNIQUE url_hash`, `INSERT OR
-  IGNORE`), so re-running `collect` is idempotent.
+  IGNORE`), so re-running `collect` is idempotent. `url_hash` is taken over
+  `urls.canonical_url`, which strips tracking params and reduces an Adzuna link
+  to its ad id, so the same posting collected on different days stays one row.
+  `_migrate` carries a `user_version` gate that recomputes keys and merges
+  duplicates once for databases written before canonicalization.
 - `digest.build_digest_data` is the only place that decides what a digest shows;
   templates are dumb.
 

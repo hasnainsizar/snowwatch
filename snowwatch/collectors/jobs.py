@@ -16,6 +16,7 @@ import httpx
 
 from .. import config
 from ..models import STUB_SOURCE, Signal
+from ..urls import STUB_URL_HOST
 from .base import CollectorError, polite_get, truncate
 
 
@@ -60,7 +61,7 @@ class StubJobSource:
             signals.append(
                 Signal(
                     source=STUB_SOURCE,
-                    url=f"https://jobs.example.com/postings/{s['id']}",
+                    url=f"https://{STUB_URL_HOST}/postings/{s['id']}",
                     title=truncate(str(s["title"]), 200),
                     text_excerpt=truncate(str(s["description"])),
                     author=str(s["company"]),

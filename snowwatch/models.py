@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-import hashlib
 from dataclasses import dataclass, field
 from datetime import datetime
+
+from .urls import url_hash
 
 # Source tag for offline stub job signals, kept distinct so digests can exclude
 # them by default.
@@ -31,7 +32,7 @@ class Signal:
     @property
     def url_hash(self) -> str:
         """Stable dedupe key derived from the canonical URL."""
-        return hashlib.sha256(self.url.strip().lower().encode("utf-8")).hexdigest()
+        return url_hash(self.url)
 
     @property
     def is_stub(self) -> bool:

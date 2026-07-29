@@ -6,12 +6,21 @@ INSERT OR IGNORE so re-collecting the same signal is a no-op.
 
 from __future__ import annotations
 
+import logging
 import sqlite3
 from collections.abc import Iterable, Iterator
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 
 from .models import STUB_SOURCE, Signal
+from .urls import STUB_URL_HOST, url_hash
+
+logger = logging.getLogger("snowwatch")
+
+# Bumped when a stored-data migration must run once against existing databases.
+# 1: url_hash recomputed from the canonical URL, duplicate rows merged.
+# 2: stub URLs moved to their own canonical namespace.
+_SCHEMA_VERSION = 2
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS signals (
@@ -55,10 +64,53 @@ def _migrate(conn: sqlite3.Connection) -> None:
     columns = {row["name"] for row in conn.execute("PRAGMA table_info(signals)")}
     if "staffing_flag" not in columns:
         conn.execute("ALTER TABLE signals ADD COLUMN staffing_flag INTEGER NOT NULL DEFAULT 0")
+    # Restores the stub tag on rows stored before the stub source had its own
+    # name, and keeps it attached to any stub row a later migration touches.
     conn.execute(
-        "UPDATE signals SET source = ? WHERE source = 'jobs' AND url LIKE '%jobs.example.com%'",
-        (STUB_SOURCE,),
+        "UPDATE signals SET source = ? WHERE source != ? AND url LIKE ?",
+        (STUB_SOURCE, STUB_SOURCE, f"%{STUB_URL_HOST}%"),
     )
+    if conn.execute("PRAGMA user_version").fetchone()[0] < _SCHEMA_VERSION:
+        merged = recanonicalize(conn)
+        if merged:
+            logger.info("canonical dedupe: merged %d duplicate rows", merged)
+        conn.execute(f"PRAGMA user_version = {_SCHEMA_VERSION}")
+
+
+def _merge_terms(rows: list[sqlite3.Row]) -> str:
+    """Union of every duplicate's matched terms, in stable order."""
+    terms = {t for row in rows for t in row["matched_terms"].split("\x1f") if t}
+    return "\x1f".join(sorted(terms))
+
+
+def recanonicalize(conn: sqlite3.Connection) -> int:
+    """Rewrite url_hash from the canonical URL and merge duplicate rows.
+
+    Rows whose URLs share a canonical form collapse into the earliest-posted
+    one, which inherits the union of the group's matched terms. Returns the
+    number of rows removed. Safe to re-run: a database with no duplicates left
+    is rewritten to the same values and reports zero.
+    """
+    groups: dict[str, list[sqlite3.Row]] = {}
+    for row in conn.execute("SELECT * FROM signals").fetchall():
+        groups.setdefault(url_hash(row["url"]), []).append(row)
+
+    # Delete every loser before rewriting keepers, so no update can collide with
+    # a hash still held by a row on its way out.
+    keepers: list[tuple[str, str, int]] = []
+    merged = 0
+    for canonical, rows in groups.items():
+        keeper = min(rows, key=lambda r: r["posted_at"])
+        losers = [r["id"] for r in rows if r["id"] != keeper["id"]]
+        if losers:
+            conn.executemany("DELETE FROM signals WHERE id = ?", [(i,) for i in losers])
+            merged += len(losers)
+        keepers.append((canonical, _merge_terms(rows), keeper["id"]))
+
+    conn.executemany(
+        "UPDATE signals SET url_hash = ?, matched_terms = ? WHERE id = ?", keepers
+    )
+    return merged
 
 
 def _to_iso(value: datetime) -> str:
@@ -116,6 +168,31 @@ def insert_signals(conn: sqlite3.Connection, signals: Iterable[Signal]) -> int:
         )
         inserted += cur.rowcount
     return inserted
+
+
+def all_signals(conn: sqlite3.Connection) -> list[tuple[int, Signal]]:
+    """Every stored signal paired with its row id, for re-enrichment."""
+    rows = conn.execute("SELECT * FROM signals").fetchall()
+    return [(row["id"], _row_to_signal(row)) for row in rows]
+
+
+def update_enrichment(conn: sqlite3.Connection, rows: Iterable[tuple[int, Signal]]) -> None:
+    """Write recomputed score, category, company, terms, and staffing flag."""
+    conn.executemany(
+        "UPDATE signals SET score = ?, category = ?, company = ?, matched_terms = ?, "
+        "staffing_flag = ? WHERE id = ?",
+        [
+            (
+                sig.score,
+                sig.category,
+                sig.company,
+                "\x1f".join(sig.matched_terms),
+                int(sig.staffing_flag),
+                row_id,
+            )
+            for row_id, sig in rows
+        ],
+    )
 
 
 def signals_since(conn: sqlite3.Connection, days: int, include_stubs: bool = True) -> list[Signal]:

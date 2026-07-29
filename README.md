@@ -80,7 +80,19 @@ snowwatch collect      # run all collectors, store new signals
 snowwatch digest       # render the trailing 14-day digest (markdown + HTML)
 snowwatch stats        # counts by source, category, and week
 snowwatch run          # collect + digest in one shot
+snowwatch seed-stubs   # store the offline demonstration signals (safe to re-run)
+snowwatch rescore      # re-apply current scoring rules to stored signals
 ```
+
+`seed-stubs` exists because the jobs collector only emits stub postings when
+Adzuna credentials are absent: once live keys are configured, a database can
+hold no stub rows at all. Seeding stores the two demonstration signals directly,
+dated inside the current window, so `digest --include-stubs` has something to
+show. It dedupes on re-run.
+
+`rescore` matters because score and category are written at collection time and
+read back verbatim by the digest: after you tune `config.py`, past signals keep
+their old numbers until you run it.
 
 The digest window defaults to 14 days and is fully configurable with `--days`;
 the trend line compares this period against the prior period of equal length.
@@ -92,7 +104,10 @@ snowwatch collect --db signals.db
 snowwatch digest --days 30 --out digests
 ```
 
-Digests are written to `digests/digest-YYYYMMDD.md` and `.html`.
+Digests are written to `digests/digest-YYYYMMDD.md` and `.html`. A
+`--include-stubs` render adds a `-stubs` suffix
+(`digests/digest-YYYYMMDD-stubs.md`) so the two renders of the same day never
+overwrite each other.
 
 ## Sample digest
 
@@ -180,10 +195,32 @@ over-credit a signal that stacks keywords without real intent. Tune the lists
 and weights in `config.py` as your corpus teaches you what fires.
 
 **Direction detection.** Inbound versus outbound migration is decided by
-explicit directional phrases, with outbound winning ties. This catches the
-common "moving to/off snowflake" forms but not every rephrasing; an ambiguous
-"snowflake migration" with no direction word is treated as outbound intent,
-which biases toward surfacing rather than hiding a possible signal.
+directional phrases and patterns, with outbound winning ties. Alongside the
+plain "moving to/off snowflake" forms, `MIGRATION_INBOUND_PATTERNS` catches
+gapped constructions such as "transitioning our data platform from Microsoft
+SQL Server to Snowflake", where a source system sits between the verb and the
+destination. Phrases that name a migration without a direction ("snowflake
+migration", "replatform") are listed in `AMBIGUOUS_MIGRATION_PHRASES`: on their
+own they still read as outbound intent, biasing toward surfacing rather than
+hiding a possible signal, but they no longer outrank an inbound construction
+found in the same text. Rephrasings outside both lists are still missed.
+
+**Dedupe identity.** Signals are keyed on `urls.canonical_url`, not the raw
+link, because collectors hand back per-request tracking noise: Adzuna rebuilds
+its landing URLs with a fresh `se` token on every search, so one ad would
+otherwise store as a new signal per collection run. Adzuna links collapse to
+their stable ad id (`adzuna:5787001382`), covering both the `/land/ad/{id}` and
+`/details/{id}` shapes; other sources keep the params that identify a post (the
+Hacker News `item?id=`) and lose tracking params, fragments, `www.`, and case.
+Databases written before canonicalization are migrated once on open: keys are
+recomputed, duplicate rows merge into the earliest-posted one with the union of
+their matched terms, and the count is logged.
+
+Stub postings get their own `stub:<path>` namespace. Because the stub and
+Adzuna namespaces are disjoint from each other and from ordinary URL keys, a
+demonstration signal can never share a dedupe key with a live posting and be
+merged into one, and `_migrate` reasserts the `jobs-stub` source tag on every
+stub row it sees.
 
 **Company confidence.** Extraction is heuristic. Explicit context is reliable;
 bare capitalization requires repetition and still yields the occasional false
@@ -266,12 +303,13 @@ the Reddit gating logic, and digest rendering.
 snowwatch/
   config.py         per-source query terms, weights, phrase buckets, enabled set
   models.py         Signal dataclass + url hashing
+  urls.py           canonical URL form behind the dedupe key
   collectors/       hackernews, stackexchange, jobs, reddit (gated) + registry
   scoring.py        rule-based score + company extraction
   classifier.py     single-category tagging
   db.py             SQLite storage, dedupe, queries
   digest.py         digest assembly + outreach angles
-  pipeline.py       collect -> enrich -> store orchestration
+  pipeline.py       collect -> enrich -> store, and rescore of stored rows
   cli.py            Typer commands
 templates/          markdown + HTML digest templates
 tests/              pytest suite with fixtures

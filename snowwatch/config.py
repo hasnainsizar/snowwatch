@@ -36,6 +36,36 @@ REDACT_QUERY_PARAMS: frozenset[str] = frozenset(
 )
 
 
+# Query parameters that carry per-request tracking noise rather than content
+# identity. Stripped before a URL becomes a dedupe key, so the same posting
+# collected on different days resolves to one signal. Matched case-insensitively.
+# Adzuna's landing URLs supply "se" (per-search token) and "v".
+TRACKING_QUERY_PARAMS: frozenset[str] = frozenset(
+    {
+        "se",
+        "v",
+        "ref",
+        "ref_src",
+        "referrer",
+        "source",
+        "campaign",
+        "cmpid",
+        "fbclid",
+        "gclid",
+        "msclkid",
+        "mc_cid",
+        "mc_eid",
+        "igshid",
+        "_ga",
+        "_hsenc",
+        "_hsmi",
+    }
+)
+
+# Prefixes covering whole tracking families (utm_source, utm_medium, ...).
+TRACKING_QUERY_PREFIXES: tuple[str, ...] = ("utm_",)
+
+
 def _env_flag(name: str) -> bool:
     return os.environ.get(name, "").strip().lower() in {"1", "true", "yes", "on"}
 

@@ -80,6 +80,20 @@ def run(
     typer.echo(f"Digest written:\n  {md_path}\n  {html_path}")
 
 
+@app.command()
+def seed_stubs(db_path: str = _db_option()) -> None:
+    """Store the offline demonstration stub signals. Safe to re-run."""
+    found, inserted = pipeline.seed_stubs(db_path)
+    typer.echo(f"Seeded {found} stub signals, {inserted} new stored in {db_path}.")
+
+
+@app.command()
+def rescore(db_path: str = _db_option()) -> None:
+    """Re-apply current scoring and classification rules to stored signals."""
+    changed = pipeline.rescore_stored(db_path)
+    typer.echo(f"Rescored stored signals: {changed} changed in {db_path}.")
+
+
 # Typer derives command names from function names; rename the digest command.
 app.registered_commands[1].name = "digest"
 

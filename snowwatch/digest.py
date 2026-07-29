@@ -159,13 +159,18 @@ def render_html(data: DigestData) -> str:
 
 
 def write_digest(conn, window_days: int, out_dir: str, include_stubs: bool = False) -> tuple[Path, Path]:
-    """Render both formats to ``out_dir`` and return (markdown_path, html_path)."""
+    """Render both formats to ``out_dir`` and return (markdown_path, html_path).
+
+    A stub-inclusive render carries a ``-stubs`` suffix so it can never
+    overwrite the plain digest generated the same day.
+    """
     data = build_digest_data(conn, window_days, include_stubs=include_stubs)
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
     stamp = data.generated_at.strftime("%Y%m%d")
-    md_path = out / f"digest-{stamp}.md"
-    html_path = out / f"digest-{stamp}.html"
+    suffix = "-stubs" if include_stubs else ""
+    md_path = out / f"digest-{stamp}{suffix}.md"
+    html_path = out / f"digest-{stamp}{suffix}.html"
     md_path.write_text(render_markdown(data), encoding="utf-8")
     html_path.write_text(render_html(data), encoding="utf-8")
     return md_path, html_path
