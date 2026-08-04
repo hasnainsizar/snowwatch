@@ -179,6 +179,14 @@ from the digest's top signals and outreach.
 to a TCO comparison, migration intent to a migration-accelerator offer, and so
 on. See `OUTREACH_ANGLES` in `digest.py`.
 
+## The companion project
+
+[groundswell](https://github.com/hasnainsizar/groundswell) watches your own
+account base for expansion signals: your customers, ready to grow. Snowwatch
+watches a rival's installed base for displacement signals: their unhappy
+customers, ready to leave. Together they cover both directions of a
+consumption-revenue go-to-market motion.
+
 ## Known limitations and scoring notes
 
 **Rule-based tradeoffs.** Scoring is deterministic phrase matching, not
